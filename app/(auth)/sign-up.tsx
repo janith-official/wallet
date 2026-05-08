@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, TextInput } from 'react-native';
-import { Link } from 'expo-router';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, TextInput } from 'react-native';
+import { Text } from '@/components/Text';
+import { Link, useRouter } from 'expo-router';
 import { supabase } from '@/supabase/client';
 
 export default function SignUpScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -14,20 +16,34 @@ export default function SignUpScreen() {
       return;
     }
     setBusy(true);
-    const { error } = await supabase.auth.signUp({ email: email.trim(), password });
+    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
     setBusy(false);
-    if (error) Alert.alert('Sign up failed', error.message);
-    else Alert.alert('Check your email', 'Confirm your address to finish signing up.');
+    if (error) {
+      Alert.alert('Sign up failed', error.message);
+      return;
+    }
+    if (!data.session) {
+      // Email confirmation is required — session won't exist yet
+      Alert.alert(
+        'Check your email',
+        'Click the confirmation link we sent you, then sign in.',
+        [{ text: 'Go to sign in', onPress: () => router.replace('/(auth)/sign-in') }],
+      );
+    }
+    // If data.session exists (email confirmation disabled), AuthGate automatically
+    // redirects to /(tabs) — no extra navigation needed here.
   };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 12 }}
+      style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: '#0f0f0f' }}
     >
-      <Text style={{ fontSize: 28, fontWeight: '700', marginBottom: 12 }}>Create account</Text>
+      <Text style={{ fontSize: 32, fontWeight: '800', color: '#f9fafb', marginBottom: 8, letterSpacing: -0.5 }}>Create account</Text>
+      <Text style={{ fontSize: 14, color: '#9ca3af', marginBottom: 4 }}>Start tracking your finances</Text>
       <TextInput
         placeholder="Email"
+        placeholderTextColor="#6b7280"
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -36,6 +52,7 @@ export default function SignUpScreen() {
       />
       <TextInput
         placeholder="Password (min 8 chars)"
+        placeholderTextColor="#6b7280"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -44,7 +61,7 @@ export default function SignUpScreen() {
       <Pressable onPress={onSubmit} disabled={busy} style={btn}>
         <Text style={btnText}>{busy ? 'Creating…' : 'Create account'}</Text>
       </Pressable>
-      <Link href="/(auth)/sign-in" style={{ textAlign: 'center', marginTop: 12, color: '#2563eb' }}>
+      <Link href="/(auth)/sign-in" style={{ textAlign: 'center', marginTop: 12, color: '#dc2626', fontSize: 14 }}>
         Already have an account? Sign in
       </Link>
     </KeyboardAvoidingView>
@@ -53,18 +70,24 @@ export default function SignUpScreen() {
 
 const input = {
   borderWidth: 1,
-  borderColor: '#d1d5db',
-  borderRadius: 8,
-  paddingHorizontal: 12,
-  paddingVertical: 12,
+  borderColor: '#2a2a2a',
+  borderRadius: 10,
+  paddingHorizontal: 14,
+  paddingVertical: 14,
   fontSize: 16,
+  color: '#f9fafb',
+  backgroundColor: '#1a1a1a',
 } as const;
 
 const btn = {
-  backgroundColor: '#111827',
-  paddingVertical: 14,
-  borderRadius: 8,
+  backgroundColor: '#dc2626',
+  paddingVertical: 15,
+  borderRadius: 10,
   alignItems: 'center' as const,
+  shadowColor: '#dc2626',
+  shadowOpacity: 0.35,
+  shadowRadius: 12,
+  elevation: 4,
 };
 
-const btnText = { color: 'white', fontSize: 16, fontWeight: '600' } as const;
+const btnText = { color: 'white', fontSize: 16, fontWeight: '700' } as const;

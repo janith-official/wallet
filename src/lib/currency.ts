@@ -1,8 +1,10 @@
-export function formatMoney(amount: number, currency: string, locale = 'en-US'): string {
+export function formatMoney(amount: number | string | null | undefined, currency: string, locale = 'en-US'): string {
+  const n = amount == null ? 0 : Number(amount);
+  const safe = isNaN(n) ? 0 : n;
   try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(safe);
   } catch {
-    return `${currency} ${amount.toFixed(2)}`;
+    return `${currency} ${safe.toFixed(2)}`;
   }
 }
 

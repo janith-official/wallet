@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
+import { Text } from '@/components/Text';
 import { Link } from 'expo-router';
 import { supabase } from '@/supabase/client';
 
@@ -18,11 +19,13 @@ export default function SignInScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 12 }}
+      style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: '#0f0f0f' }}
     >
-      <Text style={{ fontSize: 28, fontWeight: '700', marginBottom: 12 }}>Welcome back</Text>
+      <Text style={{ fontSize: 32, fontWeight: '800', color: '#f9fafb', marginBottom: 8, letterSpacing: -0.5 }}>Welcome back</Text>
+      <Text style={{ fontSize: 14, color: '#9ca3af', marginBottom: 4 }}>Sign in to continue</Text>
       <TextInput
         placeholder="Email"
+        placeholderTextColor="#6b7280"
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -31,6 +34,7 @@ export default function SignInScreen() {
       />
       <TextInput
         placeholder="Password"
+        placeholderTextColor="#6b7280"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -39,7 +43,7 @@ export default function SignInScreen() {
       <Pressable onPress={onSubmit} disabled={busy} style={btn}>
         <Text style={btnText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
       </Pressable>
-      <Link href="/(auth)/sign-up" style={{ textAlign: 'center', marginTop: 12, color: '#2563eb' }}>
+      <Link href="/(auth)/sign-up" style={{ textAlign: 'center', marginTop: 12, color: '#dc2626', fontSize: 14 }}>
         Create an account
       </Link>
     </KeyboardAvoidingView>
@@ -48,18 +52,24 @@ export default function SignInScreen() {
 
 const input = {
   borderWidth: 1,
-  borderColor: '#d1d5db',
-  borderRadius: 8,
-  paddingHorizontal: 12,
-  paddingVertical: 12,
+  borderColor: '#2a2a2a',
+  borderRadius: 10,
+  paddingHorizontal: 14,
+  paddingVertical: 14,
   fontSize: 16,
+  color: '#f9fafb',
+  backgroundColor: '#1a1a1a',
 } as const;
 
 const btn = {
-  backgroundColor: '#111827',
-  paddingVertical: 14,
-  borderRadius: 8,
+  backgroundColor: '#dc2626',
+  paddingVertical: 15,
+  borderRadius: 10,
   alignItems: 'center' as const,
+  shadowColor: '#dc2626',
+  shadowOpacity: 0.35,
+  shadowRadius: 12,
+  elevation: 4,
 };
 
-const btnText = { color: 'white', fontSize: 16, fontWeight: '600' } as const;
+const btnText = { color: 'white', fontSize: 16, fontWeight: '700' } as const;

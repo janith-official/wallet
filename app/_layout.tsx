@@ -5,6 +5,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
+import { ProfileProvider } from '@/features/profile/ProfileContext';
+import {
+  useFonts,
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+} from '@expo-google-fonts/space-grotesk';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -26,13 +34,24 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
+  });
+
+  if (!fontsLoaded) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <StatusBar style="auto" />
-            <AuthGate />
+            <ProfileProvider>
+              <StatusBar style="light" />
+              <AuthGate />
+            </ProfileProvider>
           </AuthProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
