@@ -8,28 +8,28 @@ type ProfileCtx = {
   baseCurrency: SupportedCurrency;
 };
 
-const ProfileContext = createContext<ProfileCtx>({ baseCurrency: 'USD' });
+const ProfileContext = createContext<ProfileCtx>({ baseCurrency: 'LKR' });
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const userId = session?.user.id ?? '';
 
   const { data: profile } = useQuery({
-    // Same queryKey as useProfile() — Settings' updateProfile mutation invalidates this too
+    // Same queryKey as useProfile() — must select ALL fields so the shared cache has complete data
     queryKey: ['profile', userId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('base_currency')
+        .select('user_id, display_name, base_currency, avatar_url')
         .eq('user_id', userId)
         .single();
       if (error) throw error;
-      return data as { base_currency: string };
+      return data as { user_id: string; display_name?: string | null; base_currency: string; avatar_url?: string | null };
     },
     enabled: !!userId,
   });
 
-  const baseCurrency = (profile?.base_currency ?? 'USD') as SupportedCurrency;
+  const baseCurrency = (profile?.base_currency ?? 'LKR') as SupportedCurrency;
 
   return (
     <ProfileContext.Provider value={{ baseCurrency }}>

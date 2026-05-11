@@ -1,41 +1,64 @@
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Dimensions, Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { addMonths, format, subMonths } from 'date-fns';
-import { BarChart } from 'react-native-gifted-charts';
+import { addMonths, format, getDaysInMonth, subMonths } from 'date-fns';
+import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useBaseCurrency } from '@/features/profile/ProfileContext';
 import { useDashboard } from '@/features/dashboard/useDashboard';
+import { useAccountBalances } from '@/features/profile/useProfile';
 import { TransactionRow } from '@/components/TransactionRow';
 import { formatMoney } from '@/lib/currency';
 
+const SCREEN_W = Dimensions.get('window').width;
+const CARD_MARGIN = 16;
+const CARD_INNER = SCREEN_W - CARD_MARGIN * 2 - 40; // chart usable width (card padding 20*2)
+
+/* ── palette ── */
 const C = {
-  bg: '#0f0f0f',
-  card: '#1a1a1a',
-  border: '#2a2a2a',
-  text: '#f9fafb',
-  muted: '#9ca3af',
-  income: '#22c55e',
-  expense: '#ef4444',
+  bg: '#0a0a0c',
+  card: '#141416',
+  border: '#1e1e24',
+  text: '#f0f0f5',
+  sub: '#b0b0be',
+  muted: '#5c5c70',
+  income: '#34d399',
+  expense: '#f87171',
   accent: '#dc2626',
+  purple: '#a78bfa',
+  blue: '#60a5fa',
+  cyan: '#22d3ee',
 };
 
-const card = {
-  backgroundColor: C.card,
-  borderRadius: 14,
-  shadowColor: '#000',
-  shadowOpacity: 0.4,
-  shadowRadius: 10,
-  elevation: 4,
-};
+/* ── simple card ── */
+function Card({ children, style }: { children: React.ReactNode; style?: object }) {
+  return (
+    <View
+      style={{
+        backgroundColor: C.card,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: C.border,
+        overflow: 'hidden',
+        ...style,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
 
-function SectionHeader({ title }: { title: string }) {
+function SectionLabel({ title, icon }: { title: string; icon: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-      <View style={{ width: 3, height: 16, backgroundColor: C.accent, borderRadius: 2 }} />
-      <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>{title}</Text>
+      <Ionicons name={icon as any} size={15} color={C.accent} />
+      <Text style={{ fontSize: 12, fontWeight: '700', color: C.sub, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+        {title}
+      </Text>
     </View>
   );
 }
@@ -46,39 +69,76 @@ export default function DashboardScreen() {
   const { session } = useAuth();
   const userId = session?.user.id ?? '';
   const [month, setMonth] = useState(new Date());
-
   const baseCurrency = useBaseCurrency();
 
   const { transactions, accounts, income, expenses, net, categoryTotals, recentTransactions } =
     useDashboard(userId, month);
+  const balancesQuery = useAccountBalances(userId);
+  const balances = balancesQuery.data;
 
-  const barData = categoryTotals.map((c) => ({
+  /* ── derived data ── */
+  const pieData = useMemo(() => {
+    const inc = income || 0;
+    const exp = expenses || 0;
+    if (inc === 0 && exp === 0) return [];
+    return [
+      { value: inc, color: C.income },
+      { value: exp, color: C.expense },
+    ];
+  }, [income, expenses]);
+
+  const savingsRate = useMemo(() => {
+    if (!income || income === 0) return 0;
+    return Math.max(0, Math.round(((income - expenses) / income) * 100));
+  }, [income, expenses]);
+
+  const dailySpending = useMemo(() => {
+    const txs = transactions.data ?? [];
+    const days = getDaysInMonth(month);
+    const map = new Map<number, number>();
+    txs.forEach((t: any) => {
+      if (t.type === 'expense') {
+        const day = new Date(t.occurred_at).getDate();
+        map.set(day, (map.get(day) ?? 0) + Math.abs(Number(t.amount_in_base) || Number(t.amount)));
+      }
+    });
+    return Array.from({ length: days }, (_, i) => ({
+      value: Math.round(map.get(i + 1) ?? 0),
+      label: (i + 1) % 7 === 0 || i === 0 ? String(i + 1) : '',
+    }));
+  }, [transactions.data, month]);
+
+  const barData = categoryTotals.map((c, i) => ({
     value: Math.round(c.total),
-    label: c.name.length > 6 ? c.name.slice(0, 5) + '…' : c.name,
-    frontColor: c.color ?? C.accent,
+    label: c.name.length > 5 ? c.name.slice(0, 4) + '…' : c.name,
+    frontColor: [C.accent, C.purple, C.blue, C.cyan, C.income, C.expense, '#f59e0b'][i % 7],
   }));
+
+  const maxBar = Math.max(...barData.map((d) => d.value), 1);
+  const isLoading = transactions.isLoading;
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: C.bg }}
       contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+      showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 12, paddingBottom: 16 }}>
+      {/* ── Header ── */}
+      <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 12, paddingBottom: 20 }}>
+        <Text style={{ fontSize: 12, color: C.muted, letterSpacing: 0.4, marginBottom: 2 }}>
+          {session?.user.email}
+        </Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View>
-            <Text style={{ fontSize: 12, color: C.muted, letterSpacing: 0.4 }}>{session?.user.email}</Text>
-            <Text style={{ fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.5, marginTop: 3 }}>
-              {format(month, 'MMMM yyyy')}
-            </Text>
-          </View>
+          <Text style={{ fontSize: 28, fontWeight: '800', color: C.text, letterSpacing: -0.8 }}>
+            {format(month, 'MMMM yyyy')}
+          </Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Pressable
               onPress={() => setMonth((m) => subMonths(m, 1))}
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
+                width: 36,
+                height: 36,
+                borderRadius: 12,
                 backgroundColor: C.card,
                 borderWidth: 1,
                 borderColor: C.border,
@@ -86,14 +146,14 @@ export default function DashboardScreen() {
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ fontSize: 20, color: C.text, lineHeight: 24 }}>‹</Text>
+              <Ionicons name="chevron-back" size={18} color={C.sub} />
             </Pressable>
             <Pressable
               onPress={() => setMonth((m) => addMonths(m, 1))}
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
+                width: 36,
+                height: 36,
+                borderRadius: 12,
                 backgroundColor: C.card,
                 borderWidth: 1,
                 borderColor: C.border,
@@ -101,180 +161,374 @@ export default function DashboardScreen() {
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ fontSize: 20, color: C.text, lineHeight: 24 }}>›</Text>
+              <Ionicons name="chevron-forward" size={18} color={C.sub} />
             </Pressable>
           </View>
         </View>
       </View>
 
-      {/* Balance Hero Card */}
-      <View
-        style={{
-          marginHorizontal: 16,
-          marginBottom: 20,
-          borderRadius: 16,
-          backgroundColor: C.card,
-          shadowColor: C.accent,
-          shadowOpacity: 0.22,
-          shadowRadius: 22,
-          elevation: 8,
-        }}
-      >
-        <View style={{ height: 3, backgroundColor: C.accent, borderTopLeftRadius: 16, borderTopRightRadius: 16 }} />
-        <View style={{ padding: 20 }}>
-          <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>
-            Net Balance
-          </Text>
-          {transactions.isLoading ? (
-            <ActivityIndicator style={{ paddingVertical: 20 }} color={C.accent} />
-          ) : (
-            <>
-              <Text
-                style={{ fontSize: 42, fontWeight: '800', color: C.text, letterSpacing: -2, marginBottom: 20, lineHeight: 50 }}
+      {isLoading ? (
+        <ActivityIndicator style={{ paddingVertical: 60 }} color={C.accent} size="large" />
+      ) : (
+        <>
+          {/* ── Balance Hero ── */}
+          <View style={{ marginHorizontal: CARD_MARGIN, marginBottom: 20 }}>
+            <Card>
+              <LinearGradient
+                colors={[C.accent + '14', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
               >
-                {formatMoney(net, baseCurrency)}
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: C.income + '18',
-                    borderRadius: 10,
-                    padding: 12,
-                    borderWidth: 1,
-                    borderColor: C.income + '40',
-                  }}
-                >
-                  <Text style={{ fontSize: 10, color: C.income, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4 }}>
-                    ↑ INCOME
+                <View style={{ height: 3, backgroundColor: C.accent, borderTopLeftRadius: 16, borderTopRightRadius: 16 }} />
+                <View style={{ padding: 22 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent }} />
+                    <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                      Net Balance
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: 42,
+                      fontWeight: '800',
+                      color: C.text,
+                      letterSpacing: -2,
+                      marginBottom: 20,
+                      lineHeight: 50,
+                    }}
+                  >
+                    {formatMoney(net, baseCurrency)}
                   </Text>
-                  <Text style={{ fontSize: 16, fontWeight: '700', color: C.income }}>
-                    {formatMoney(income, baseCurrency)}
-                  </Text>
-                </View>
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: C.expense + '18',
-                    borderRadius: 10,
-                    padding: 12,
-                    borderWidth: 1,
-                    borderColor: C.expense + '40',
-                  }}
-                >
-                  <Text style={{ fontSize: 10, color: C.expense, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4 }}>
-                    ↓ EXPENSES
-                  </Text>
-                  <Text style={{ fontSize: 16, fontWeight: '700', color: C.expense }}>
-                    {formatMoney(expenses, baseCurrency)}
-                  </Text>
-                </View>
-              </View>
-            </>
-          )}
-        </View>
-      </View>
 
-      {/* Spending by Category */}
-      <View style={{ marginHorizontal: 16, marginBottom: 20 }}>
-        <SectionHeader title="Spending by Category" />
-        <View style={{ ...card, padding: 16, overflow: 'hidden' }}>
-          {barData.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 28 }}>
-              <Text style={{ fontSize: 36, marginBottom: 10 }}>📊</Text>
-              <Text style={{ color: C.muted, fontSize: 14 }}>No expenses this month</Text>
-            </View>
-          ) : (
-            <BarChart
-              data={barData}
-              barWidth={32}
-              spacing={14}
-              hideRules={false}
-              xAxisLabelTextStyle={{ fontSize: 10, color: C.muted }}
-              yAxisTextStyle={{ fontSize: 10, color: C.muted }}
-              yAxisTextColor={C.muted}
-              backgroundColor={C.card}
-              noOfSections={4}
-              maxValue={Math.max(...barData.map((d) => d.value)) * 1.2}
-            />
-          )}
-        </View>
-      </View>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View
+                      style={{
+                        flex: 1,
+                        backgroundColor: C.income + '12',
+                        borderRadius: 12,
+                        padding: 14,
+                        borderWidth: 1,
+                        borderColor: C.income + '28',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Ionicons name="trending-up" size={14} color={C.income} />
+                        <Text style={{ fontSize: 10, color: C.income, fontWeight: '700', letterSpacing: 0.8 }}>
+                          INCOME
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 17, fontWeight: '800', color: C.income, letterSpacing: -0.5 }}>
+                        {formatMoney(income, baseCurrency)}
+                      </Text>
+                    </View>
 
-      {/* Accounts Strip */}
-      {(accounts.data?.length ?? 0) > 0 && (
-        <View style={{ marginBottom: 20 }}>
-          <View style={{ marginHorizontal: 16 }}>
-            <SectionHeader title="Accounts" />
+                    <View
+                      style={{
+                        flex: 1,
+                        backgroundColor: C.expense + '12',
+                        borderRadius: 12,
+                        padding: 14,
+                        borderWidth: 1,
+                        borderColor: C.expense + '28',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Ionicons name="trending-down" size={14} color={C.expense} />
+                        <Text style={{ fontSize: 10, color: C.expense, fontWeight: '700', letterSpacing: 0.8 }}>
+                          EXPENSES
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 17, fontWeight: '800', color: C.expense, letterSpacing: -0.5 }}>
+                        {formatMoney(expenses, baseCurrency)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </LinearGradient>
+            </Card>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
-          >
-            {accounts.data?.map((acc) => (
-              <View
-                key={acc.id}
-                style={{
-                  width: 152,
-                  borderRadius: 12,
-                  backgroundColor: C.card,
-                  borderWidth: 1,
-                  borderColor: C.border,
-                  shadowColor: '#000',
-                  shadowOpacity: 0.3,
-                  shadowRadius: 6,
-                  elevation: 3,
-                  overflow: 'hidden',
-                }}
-              >
-                <View style={{ height: 2, backgroundColor: C.accent }} />
-                <View style={{ padding: 14 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: C.text }} numberOfLines={1}>
-                    {acc.name}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: C.muted, marginTop: 2, textTransform: 'capitalize' }}>
-                    {acc.type}
-                  </Text>
-                  <Text style={{ fontSize: 18, fontWeight: '800', color: C.accent, marginTop: 10, letterSpacing: -0.5 }}>
-                    {formatMoney(acc.opening_balance, acc.currency)}
-                  </Text>
+
+          {/* ── Donut + Savings ── */}
+          <View style={{ marginHorizontal: CARD_MARGIN, marginBottom: 20 }}>
+            <Card>
+              <View style={{ padding: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                  {/* Donut */}
+                  <View style={{ alignItems: 'center', flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: C.muted,
+                        letterSpacing: 1,
+                        textTransform: 'uppercase',
+                        marginBottom: 16,
+                      }}
+                    >
+                      Breakdown
+                    </Text>
+                    {pieData.length > 0 ? (
+                      <PieChart
+                        data={pieData}
+                        donut
+                        radius={52}
+                        innerRadius={34}
+                        innerCircleColor={C.card}
+                        centerLabelComponent={() => (
+                          <Ionicons name="wallet" size={16} color={C.muted} />
+                        )}
+                      />
+                    ) : (
+                      <View style={{ width: 104, height: 104, justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: C.muted, fontSize: 12 }}>No data</Text>
+                      </View>
+                    )}
+                    <View style={{ flexDirection: 'row', gap: 14, marginTop: 14 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.income }} />
+                        <Text style={{ fontSize: 10, color: C.muted }}>Income</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.expense }} />
+                        <Text style={{ fontSize: 10, color: C.muted }}>Expense</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Divider */}
+                  <View style={{ width: 1, backgroundColor: C.border, marginHorizontal: 16, alignSelf: 'stretch' }} />
+
+                  {/* Savings Rate */}
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 20 }}>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        color: C.muted,
+                        letterSpacing: 1,
+                        textTransform: 'uppercase',
+                        marginBottom: 16,
+                      }}
+                    >
+                      Saved
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 38,
+                        fontWeight: '800',
+                        color: savingsRate > 0 ? C.income : C.expense,
+                        letterSpacing: -2,
+                      }}
+                    >
+                      {savingsRate}
+                      <Text style={{ fontSize: 16, fontWeight: '600' }}>%</Text>
+                    </Text>
+                    <Text style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>savings rate</Text>
+
+                    {/* Progress bar with fixed width */}
+                    <View
+                      style={{
+                        width: 100,
+                        height: 6,
+                        backgroundColor: C.border,
+                        borderRadius: 3,
+                        marginTop: 14,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <View
+                        style={{
+                          height: 6,
+                          width: Math.min(savingsRate, 100),
+                          backgroundColor: savingsRate > 0 ? C.income : C.expense,
+                          borderRadius: 3,
+                        }}
+                      />
+                    </View>
+                  </View>
                 </View>
               </View>
-            ))}
-          </ScrollView>
-        </View>
+            </Card>
+          </View>
+
+          {/* ── Spending Trend ── */}
+          <View style={{ marginHorizontal: CARD_MARGIN, marginBottom: 20 }}>
+            <SectionLabel title="Spending Trend" icon="analytics-outline" />
+            <Card>
+              <View style={{ padding: 20 }}>
+                {dailySpending.some((d) => d.value > 0) ? (
+                  <LineChart
+                    data={dailySpending}
+                    width={CARD_INNER}
+                    height={140}
+                    color={C.accent}
+                    thickness={2}
+                    startFillColor={C.accent + '30'}
+                    endFillColor={C.accent + '05'}
+                    areaChart
+                    curved
+                    hideDataPoints
+                    startOpacity={0.6}
+                    endOpacity={0.05}
+                    spacing={Math.max(6, Math.floor(CARD_INNER / dailySpending.length))}
+                    backgroundColor="transparent"
+                    rulesColor={C.border}
+                    rulesType="dashed"
+                    yAxisColor="transparent"
+                    xAxisColor={C.border}
+                    yAxisTextStyle={{ fontSize: 9, color: C.muted }}
+                    xAxisLabelTextStyle={{ fontSize: 9, color: C.muted }}
+                    noOfSections={3}
+                    initialSpacing={0}
+                    endSpacing={0}
+                  />
+                ) : (
+                  <View style={{ height: 140, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="analytics-outline" size={28} color={C.border} />
+                    <Text style={{ color: C.muted, fontSize: 13, marginTop: 8 }}>No spending data yet</Text>
+                  </View>
+                )}
+              </View>
+            </Card>
+          </View>
+
+          {/* ── Category Breakdown ── */}
+          <View style={{ marginHorizontal: CARD_MARGIN, marginBottom: 20 }}>
+            <SectionLabel title="Top Categories" icon="grid-outline" />
+            <Card>
+              <View style={{ padding: 20 }}>
+                {barData.length > 0 ? (
+                  <BarChart
+                    data={barData}
+                    barWidth={24}
+                    spacing={14}
+                    roundedTop
+                    roundedBottom
+                    hideRules
+                    xAxisLabelTextStyle={{ fontSize: 9, color: C.muted }}
+                    yAxisTextStyle={{ fontSize: 9, color: C.muted }}
+                    yAxisColor="transparent"
+                    xAxisColor={C.border}
+                    noOfSections={4}
+                    maxValue={maxBar * 1.3}
+                    backgroundColor="transparent"
+                    barBorderRadius={4}
+                    isAnimated
+                    animationDuration={500}
+                  />
+                ) : (
+                  <View style={{ height: 140, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="pie-chart-outline" size={28} color={C.border} />
+                    <Text style={{ color: C.muted, fontSize: 13, marginTop: 8 }}>No expenses this month</Text>
+                  </View>
+                )}
+              </View>
+            </Card>
+          </View>
+
+          {/* ── Accounts ── */}
+          {(accounts.data?.length ?? 0) > 0 && (
+            <View style={{ marginBottom: 20 }}>
+              <View style={{ marginHorizontal: CARD_MARGIN }}>
+                <SectionLabel title="Accounts" icon="wallet-outline" />
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: CARD_MARGIN, gap: 10 }}
+              >
+                {accounts.data?.filter((a) => !a.archived).map((acc, i) => {
+                    const fallbackColor = [C.purple, C.blue, C.accent, C.cyan][i % 4];
+                    const accColor = acc.color || fallbackColor;
+                    const displayBalance = balances?.get(acc.id) ?? acc.opening_balance;
+                    return (
+                      <Pressable
+                        key={acc.id}
+                        onPress={() => router.push(`/account/${acc.id}`)}
+                        style={({ pressed }) => ({
+                          width: 156,
+                          backgroundColor: C.card,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: C.border,
+                          overflow: 'hidden',
+                          opacity: pressed ? 0.85 : 1,
+                        })}
+                      >
+                        <View style={{ height: 3, backgroundColor: accColor }} />
+                        <View style={{ padding: 14 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                            <View
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 8,
+                                backgroundColor: accColor + '18',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {acc.icon ? (
+                                <Text style={{ fontSize: 14 }}>{acc.icon}</Text>
+                              ) : (
+                                <Ionicons
+                                  name={acc.type === 'bank' ? 'business' : acc.type === 'card' ? 'card' : acc.type === 'cash' ? 'cash' : 'wallet'}
+                                  size={14}
+                                  color={accColor}
+                                />
+                              )}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: C.text }} numberOfLines={1}>
+                                {acc.name}
+                              </Text>
+                              <Text style={{ fontSize: 10, color: C.muted, textTransform: 'capitalize' }}>
+                                {acc.type}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ fontSize: 18, fontWeight: '800', color: accColor, letterSpacing: -0.5 }}>
+                            {formatMoney(displayBalance, acc.currency)}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ── Recent Transactions ── */}
+          <View style={{ marginHorizontal: CARD_MARGIN }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="time-outline" size={15} color={C.accent} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: C.sub, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                  Recent
+                </Text>
+              </View>
+              <Pressable onPress={() => router.push('/(tabs)/transactions' as never)}>
+                <Text style={{ fontSize: 12, color: C.accent, fontWeight: '600' }}>See all</Text>
+              </Pressable>
+            </View>
+            <Card>
+              {recentTransactions.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                  <Ionicons name="receipt-outline" size={28} color={C.border} />
+                  <Text style={{ color: C.muted, fontSize: 13, marginTop: 8 }}>No transactions this month</Text>
+                </View>
+              ) : (
+                recentTransactions.map((t, i) => (
+                  <TransactionRow
+                    key={t.id ?? i}
+                    item={t}
+                    onPress={(id) => router.push(`/transaction/${id}` as never)}
+                    showDate
+                  />
+                ))
+              )}
+            </Card>
+          </View>
+        </>
       )}
-
-      {/* Recent Transactions */}
-      <View style={{ marginHorizontal: 16 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ width: 3, height: 16, backgroundColor: C.accent, borderRadius: 2 }} />
-            <Text style={{ fontSize: 14, fontWeight: '700', color: C.text }}>Recent</Text>
-          </View>
-          <Pressable onPress={() => router.push('/(tabs)/transactions' as never)}>
-            <Text style={{ fontSize: 13, color: C.accent, fontWeight: '600' }}>See all ›</Text>
-          </Pressable>
-        </View>
-        <View style={{ ...card, overflow: 'hidden' }}>
-          {recentTransactions.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <Text style={{ fontSize: 36, marginBottom: 10 }}>💸</Text>
-              <Text style={{ color: C.muted, fontSize: 14 }}>No transactions this month</Text>
-            </View>
-          ) : (
-            recentTransactions.map((t, i) => (
-              <TransactionRow
-                key={t.id ?? i}
-                item={t}
-                onPress={(id) => router.push(`/transaction/${id}` as never)}
-                showDate
-              />
-            ))
-          )}
-        </View>
-      </View>
     </ScrollView>
   );
 }

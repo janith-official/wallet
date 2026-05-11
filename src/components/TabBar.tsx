@@ -1,7 +1,10 @@
-import { useRef, useEffect } from 'react';
-import { Animated, Dimensions, Pressable, View } from 'react-native';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useRef, useState, useCallback } from 'react';
+import { Animated, Pressable, View } from 'react-native';
+import type { MaterialTopTabBarProps } from '@react-navigation/material-top-tabs';
+import type { LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/Text';
 
 const TAB_META: Record<string, { label: string; icon: string }> = {
@@ -12,40 +15,52 @@ const TAB_META: Record<string, { label: string; icon: string }> = {
 };
 
 const ACCENT = '#dc2626';
-const SCREEN_W = Dimensions.get('window').width;
-const TAB_W = SCREEN_W / 4;
-const PILL_INSET = 6;
-const PILL_W = TAB_W - PILL_INSET * 2;
-const PILL_H = 52;
+const CONTENT_H = 64;
+const PILL_INSET = 8;
+const PILL_H = 46;
+const LINE_H = 3;
+const MARGIN_H = 12;
+const BAR_RADIUS = 20;
+const SCREEN_BG = '#0f0f0f';
 
-export function TabBar({ state, navigation, insets }: BottomTabBarProps) {
-  const pillAnim = useRef(new Animated.Value(state.index)).current;
+const BAR_TOP = '#2c2c2e';
+const BAR_MID = '#232326';
+const BAR_BOT = '#1a1a1d';
 
-  // Four separate refs — must not be in a conditional or loop
+export function TabBar({ state, navigation, position }: MaterialTopTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const [barWidth, setBarWidth] = useState(0);
+
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    setBarWidth(e.nativeEvent.layout.width);
+  }, []);
+
+  const tabCount = state.routes.length;
+  const tabW = barWidth / tabCount;
+  const pillW = tabW - PILL_INSET * 2;
+  const lineW = tabW * 0.4;
+
   const s0 = useRef(new Animated.Value(1)).current;
   const s1 = useRef(new Animated.Value(1)).current;
   const s2 = useRef(new Animated.Value(1)).current;
   const s3 = useRef(new Animated.Value(1)).current;
   const scaleAnims = [s0, s1, s2, s3];
 
-  useEffect(() => {
-    Animated.spring(pillAnim, {
-      toValue: state.index,
-      useNativeDriver: true,
-      tension: 68,
-      friction: 11,
-    }).start();
-  }, [state.index]);
+  // Use the position prop from material-top-tabs for real-time pill tracking.
+  // This animated value follows the swipe finger position natively.
+  const pillTranslateX = position.interpolate({
+    inputRange: state.routes.map((_, i) => i),
+    outputRange: state.routes.map((_, i) => i * tabW + PILL_INSET),
+  });
 
-  const pillTranslateX = pillAnim.interpolate({
-    inputRange: [0, 1, 2, 3],
-    outputRange: [0, 1, 2, 3].map((i) => i * TAB_W + PILL_INSET),
+  const lineTranslateX = position.interpolate({
+    inputRange: state.routes.map((_, i) => i),
+    outputRange: state.routes.map((_, i) => i * tabW + (tabW - lineW) / 2),
   });
 
   const handlePress = (index: number, routeKey: string, routeName: string) => {
     const isFocused = state.index === index;
 
-    // Bounce animation
     const scale = scaleAnims[index];
     Animated.sequence([
       Animated.timing(scale, {
@@ -72,65 +87,129 @@ export function TabBar({ state, navigation, insets }: BottomTabBarProps) {
     }
   };
 
-  const barHeight = 62 + insets.bottom;
-
   return (
     <View
       style={{
-        height: barHeight,
-        backgroundColor: '#0f0f0f',
-        borderTopWidth: 1,
-        borderTopColor: '#1f1f1f',
-        flexDirection: 'row',
+        paddingBottom: insets.bottom,
+        paddingHorizontal: MARGIN_H,
+        backgroundColor: SCREEN_BG,
       }}
     >
-      {/* Sliding pill */}
-      <Animated.View
-        pointerEvents="none"
+      <View
+        onLayout={onLayout}
         style={{
-          position: 'absolute',
-          top: (62 - PILL_H) / 2,
-          width: PILL_W,
-          height: PILL_H,
-          borderRadius: PILL_H / 2,
-          backgroundColor: ACCENT + '18',
-          transform: [{ translateX: pillTranslateX }],
+          position: 'relative',
         }}
-      />
+      >
+        {/* Shadow layer */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderRadius: BAR_RADIUS,
+            backgroundColor: BAR_BOT,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.5,
+            shadowRadius: 12,
+            elevation: 20,
+          }}
+        />
 
-      {state.routes.map((route, index) => {
-        const isFocused = state.index === index;
-        const meta = TAB_META[route.name] ?? { label: route.name, icon: 'ellipse-outline' };
-        const color = isFocused ? ACCENT : '#6b7280';
+        {/* 3D gradient bar */}
+        <LinearGradient
+          colors={[BAR_TOP, BAR_MID, BAR_BOT]}
+          locations={[0, 0.4, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={{
+            borderRadius: BAR_RADIUS,
+            overflow: 'hidden',
+          }}
+        >
+          <View style={{ height: 1, backgroundColor: '#ffffff10' }} />
 
-        return (
-          <Pressable
-            key={route.key}
-            onPress={() => handlePress(index, route.key, route.name)}
-            style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-          >
+          {/* Sliding accent top line */}
+          {barWidth > 0 && (
             <Animated.View
+              pointerEvents="none"
               style={{
-                alignItems: 'center',
-                gap: 3,
-                transform: [{ scale: scaleAnims[index] }],
+                position: 'absolute',
+                top: 0,
+                width: lineW,
+                height: LINE_H,
+                borderBottomLeftRadius: LINE_H,
+                borderBottomRightRadius: LINE_H,
+                backgroundColor: ACCENT,
+                transform: [{ translateX: lineTranslateX }],
               }}
-            >
-              <Ionicons name={meta.icon as any} size={24} color={color} />
-              <Text
+            />
+          )}
+
+          <View style={{ height: CONTENT_H, flexDirection: 'row' }}>
+            {/* Pill background */}
+            {barWidth > 0 && (
+              <Animated.View
+                pointerEvents="none"
                 style={{
-                  fontSize: 10,
-                  fontWeight: '600',
-                  color,
-                  letterSpacing: 0.2,
+                  position: 'absolute',
+                  top: (CONTENT_H - PILL_H) / 2,
+                  width: pillW,
+                  height: PILL_H,
+                  borderRadius: PILL_H / 2,
+                  backgroundColor: ACCENT + '20',
+                  borderWidth: 1,
+                  borderColor: ACCENT + '30',
+                  transform: [{ translateX: pillTranslateX }],
                 }}
-              >
-                {meta.label}
-              </Text>
-            </Animated.View>
-          </Pressable>
-        );
-      })}
+              />
+            )}
+
+            {state.routes.map((route, index) => {
+              const isFocused = state.index === index;
+              const meta = TAB_META[route.name] ?? { label: route.name, icon: 'ellipse-outline' };
+              const color = isFocused ? ACCENT : '#8e8e93';
+
+              return (
+                <Pressable
+                  key={route.key}
+                  onPress={() => handlePress(index, route.key, route.name)}
+                  style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Animated.View
+                    style={{
+                      alignItems: 'center',
+                      gap: 3,
+                      transform: [{ scale: scaleAnims[index] }],
+                    }}
+                  >
+                    <Ionicons
+                      name={(isFocused ? meta.icon.replace('-outline', '') : meta.icon) as any}
+                      size={24}
+                      color={color}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: isFocused ? '700' : '500',
+                        color,
+                        letterSpacing: 0.2,
+                      }}
+                    >
+                      {meta.label}
+                    </Text>
+                  </Animated.View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={{ height: 1, backgroundColor: '#00000040' }} />
+        </LinearGradient>
+      </View>
     </View>
   );
 }

@@ -1,14 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/supabase/client';
-
-export type Account = {
-  id: string;
-  name: string;
-  type: string;
-  currency: string;
-  opening_balance: number;
-};
+import { useAccounts } from '@/features/profile/useProfile';
 
 export type Transaction = {
   id: string;
@@ -31,7 +24,7 @@ export function useDashboard(userId: string, month: Date) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('transactions')
-        .select('id, amount, currency, amount_in_base, type, occurred_at, note, category:categories(name, icon, color), account:accounts(name)')
+        .select('id, amount, currency, amount_in_base, type, occurred_at, note, category:categories(name, icon, color), account:accounts!transactions_account_id_fkey(name)')
         .eq('user_id', userId)
         .is('deleted_at', null)
         .gte('occurred_at', from)
@@ -43,24 +36,11 @@ export function useDashboard(userId: string, month: Date) {
     enabled: !!userId,
   });
 
-  const accounts = useQuery({
-    queryKey: ['accounts', userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('id, name, type, currency, opening_balance')
-        .eq('user_id', userId)
-        .is('deleted_at', null)
-        .eq('archived', false)
-        .order('name');
-      if (error) throw error;
-      return (data ?? []) as Account[];
-    },
-    enabled: !!userId,
-  });
+  const accounts = useAccounts(userId);
 
   const txList = transactions.data ?? [];
 
+  // Exclude transfers from income/expense sums (transfers are zero-sum across accounts)
   const income = txList.filter((t) => t.type === 'income').reduce((s, t) => s + (Number(t.amount_in_base) || 0), 0);
   const expenses = txList.filter((t) => t.type === 'expense').reduce((s, t) => s + (Number(t.amount_in_base) || 0), 0);
   const net = income - expenses;

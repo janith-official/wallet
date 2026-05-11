@@ -1,5 +1,14 @@
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/Text';
+import { Ionicons } from '@expo/vector-icons';
+
+const C = {
+  card: '#141416',
+  border: '#1e1e24',
+  text: '#f0f0f5',
+  muted: '#5c5c70',
+  sub: '#b0b0be',
+};
 
 type Props = {
   label: string;
@@ -7,9 +16,19 @@ type Props = {
   onPress?: () => void;
   showChevron?: boolean;
   labelColor?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  iconColor?: string;
 };
 
-export function SettingsRow({ label, value, onPress, showChevron = true, labelColor = '#f9fafb' }: Props) {
+export function SettingsRow({
+  label,
+  value,
+  onPress,
+  showChevron = true,
+  labelColor = C.text,
+  icon,
+  iconColor = C.sub,
+}: Props) {
   return (
     <Pressable
       onPress={onPress}
@@ -18,18 +37,20 @@ export function SettingsRow({ label, value, onPress, showChevron = true, labelCo
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingVertical: 14,
-        backgroundColor: pressed ? '#242424' : '#1a1a1a',
+        backgroundColor: pressed ? C.border : 'transparent',
+        gap: 12,
       })}
     >
-      <Text style={{ flex: 1, fontSize: 15, color: labelColor }}>{label}</Text>
+      {icon && <Ionicons name={icon} size={18} color={iconColor} />}
+      <Text style={{ flex: 1, fontSize: 14, fontWeight: '500', color: labelColor }}>{label}</Text>
       {value ? (
-        <Text style={{ fontSize: 14, color: '#9ca3af', marginRight: showChevron ? 6 : 0 }}>{value}</Text>
+        <Text style={{ fontSize: 13, color: C.sub, marginRight: showChevron ? 4 : 0 }}>{value}</Text>
       ) : null}
-      {showChevron && <Text style={{ fontSize: 14, color: '#6b7280' }}>›</Text>}
+      {showChevron && <Ionicons name="chevron-forward" size={16} color={C.muted} />}
     </Pressable>
   );
 }
 
 export function SettingsSeparator() {
-  return <View style={{ height: 1, backgroundColor: '#2a2a2a', marginLeft: 16 }} />;
+  return <View style={{ height: 1, backgroundColor: C.border, marginLeft: 46 }} />;
 }

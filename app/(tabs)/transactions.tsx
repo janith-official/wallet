@@ -3,17 +3,21 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Dimensions,
   Modal,
   Pressable,
+  ScrollView,
   SectionList,
   TextInput,
   View,
 } from 'react-native';
 import { Text } from '@/components/Text';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addMonths, format, subMonths } from 'date-fns';
 import { useForm, Controller } from 'react-hook-form';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useBaseCurrency } from '@/features/profile/ProfileContext';
 import { useTransactions, useAddTransaction } from '@/features/transactions/useTransactions';
@@ -26,23 +30,28 @@ import { formatMoney } from '@/lib/currency';
 import type { TransactionRowData } from '@/components/TransactionRow';
 import type { SupportedCurrency } from '@/components/CurrencyPicker';
 
+const SCREEN_W = Dimensions.get('window').width;
+
+/* ── palette (matches dashboard) ── */
 const C = {
-  bg: '#0f0f0f',
-  card: '#1a1a1a',
-  border: '#2a2a2a',
-  text: '#f9fafb',
-  muted: '#9ca3af',
-  income: '#22c55e',
-  expense: '#ef4444',
+  bg: '#0a0a0c',
+  card: '#141416',
+  border: '#1e1e24',
+  text: '#f0f0f5',
+  sub: '#b0b0be',
+  muted: '#5c5c70',
+  income: '#34d399',
+  expense: '#f87171',
   accent: '#dc2626',
+  inputBg: '#0e0e10',
 };
 
 type TxType = 'all' | 'income' | 'expense' | 'transfer';
-const FILTERS: { key: TxType; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'income', label: 'Income' },
-  { key: 'expense', label: 'Expense' },
-  { key: 'transfer', label: 'Transfer' },
+const FILTERS: { key: TxType; label: string; icon: string }[] = [
+  { key: 'all', label: 'All', icon: 'layers-outline' },
+  { key: 'income', label: 'Income', icon: 'trending-up-outline' },
+  { key: 'expense', label: 'Expense', icon: 'trending-down-outline' },
+  { key: 'transfer', label: 'Transfer', icon: 'swap-horizontal-outline' },
 ];
 
 type AddFormValues = {
@@ -50,6 +59,7 @@ type AddFormValues = {
   amount: string;
   currency: SupportedCurrency;
   account_id: string;
+  to_account_id: string;
   category_id: string;
   note: string;
 };
@@ -73,9 +83,10 @@ export default function TransactionsScreen() {
   const [month, setMonth] = useState(new Date());
   const [typeFilter, setTypeFilter] = useState<TxType>('all');
   const [showAdd, setShowAdd] = useState(false);
-  const slideAnim = useRef(new Animated.Value(400)).current;
+  const [accountFilter, setAccountFilter] = useState<string | null>(null);
+  const slideAnim = useRef(new Animated.Value(600)).current;
 
-  const query = useTransactions(userId, month, typeFilter);
+  const query = useTransactions(userId, month, typeFilter, accountFilter);
   const addMutation = useAddTransaction(userId);
   const accountsQuery = useAccounts(userId);
   const accounts = accountsQuery.data ?? [];
@@ -89,6 +100,7 @@ export default function TransactionsScreen() {
   const income = allItems.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
   const expenses = allItems.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
   const net = income - expenses;
+  const txCount = allItems.length;
 
   const openModal = () => {
     setValue('currency', baseCurrency);
@@ -98,18 +110,20 @@ export default function TransactionsScreen() {
     Animated.timing(slideAnim, { toValue: 0, duration: 280, useNativeDriver: true }).start();
   };
   const closeModal = () => {
-    Animated.timing(slideAnim, { toValue: 400, duration: 240, useNativeDriver: true }).start(() =>
+    Animated.timing(slideAnim, { toValue: 600, duration: 240, useNativeDriver: true }).start(() =>
       setShowAdd(false),
     );
   };
 
   const { control, handleSubmit, reset, watch, setValue } = useForm<AddFormValues>({
-    defaultValues: { type: 'expense', amount: '', currency: baseCurrency, account_id: '', category_id: '', note: '' },
+    defaultValues: { type: 'expense', amount: '', currency: baseCurrency, account_id: '', to_account_id: '', category_id: '', note: '' },
   });
 
   const txType = watch('type');
+  const activeAccounts = accounts.filter((a) => !a.archived);
   useEffect(() => {
     setValue('category_id', '');
+    setValue('to_account_id', '');
   }, [txType, setValue]);
 
   const onSave = handleSubmit(async (values) => {
@@ -122,6 +136,16 @@ export default function TransactionsScreen() {
       Alert.alert('No account', 'Please select an account first from Settings.');
       return;
     }
+    if (values.type === 'transfer') {
+      if (!values.to_account_id) {
+        Alert.alert('Missing destination', 'Please select a destination account for the transfer.');
+        return;
+      }
+      if (values.account_id === values.to_account_id) {
+        Alert.alert('Same account', 'Source and destination accounts must be different.');
+        return;
+      }
+    }
     try {
       await addMutation.mutateAsync({
         amount,
@@ -132,6 +156,7 @@ export default function TransactionsScreen() {
         note: values.note || undefined,
         account_id: values.account_id,
         category_id: values.category_id || undefined,
+        to_account_id: values.type === 'transfer' ? values.to_account_id || undefined : undefined,
       });
       reset();
       closeModal();
@@ -148,113 +173,210 @@ export default function TransactionsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* Header */}
+      {/* ── Header ── */}
+      <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 10, paddingBottom: 14, backgroundColor: C.bg }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Text style={{ fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.8 }}>Transactions</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              onPress={() => setMonth((m) => subMonths(m, 1))}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                backgroundColor: C.card,
+                borderWidth: 1,
+                borderColor: C.border,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="chevron-back" size={16} color={C.sub} />
+            </Pressable>
+            <Text style={{ fontSize: 13, color: C.text, fontWeight: '600', minWidth: 76, textAlign: 'center' }}>
+              {format(month, 'MMM yyyy')}
+            </Text>
+            <Pressable
+              onPress={() => setMonth((m) => addMonths(m, 1))}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                backgroundColor: C.card,
+                borderWidth: 1,
+                borderColor: C.border,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Ionicons name="chevron-forward" size={16} color={C.sub} />
+            </Pressable>
+          </View>
+        </View>
+
+        {/* ── Summary Cards ── */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+          {[
+            { label: 'Income', value: income, color: C.income, icon: 'trending-up' as const },
+            { label: 'Expenses', value: expenses, color: C.expense, icon: 'trending-down' as const },
+            { label: 'Net', value: net, color: net >= 0 ? C.income : C.expense, icon: 'analytics' as const },
+          ].map((s) => (
+            <View
+              key={s.label}
+              style={{
+                flex: 1,
+                backgroundColor: C.card,
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: C.border,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                <Ionicons name={s.icon} size={12} color={s.color} />
+                <Text style={{ fontSize: 9, color: C.muted, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                  {s.label}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: s.color, letterSpacing: -0.3 }} numberOfLines={1}>
+                {formatMoney(s.value, baseCurrency)}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* ── Filter Chips ── */}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {FILTERS.map((f) => {
+            const active = typeFilter === f.key;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() => setTypeFilter(f.key)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 10,
+                  backgroundColor: active ? C.accent + '18' : C.card,
+                  borderWidth: 1,
+                  borderColor: active ? C.accent + '40' : C.border,
+                }}
+              >
+                <Ionicons name={f.icon as any} size={13} color={active ? C.accent : C.muted} />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: '600',
+                    color: active ? C.accent : C.muted,
+                  }}
+                >
+                  {f.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* ── Account Filter ── */}
+        {activeAccounts.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingTop: 10 }}
+          >
+            <Pressable
+              onPress={() => setAccountFilter(null)}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 10,
+                backgroundColor: accountFilter === null ? C.accent + '18' : C.card,
+                borderWidth: 1,
+                borderColor: accountFilter === null ? C.accent + '40' : C.border,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '600', color: accountFilter === null ? C.accent : C.muted }}>
+                All Accounts
+              </Text>
+            </Pressable>
+            {activeAccounts.map((acc) => {
+              const active = accountFilter === acc.id;
+              return (
+                <Pressable
+                  key={acc.id}
+                  onPress={() => setAccountFilter(active ? null : acc.id)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                    backgroundColor: active ? C.accent + '18' : C.card,
+                    borderWidth: 1,
+                    borderColor: active ? C.accent + '40' : C.border,
+                  }}
+                >
+                  {acc.icon ? <Text style={{ fontSize: 12 }}>{acc.icon}</Text> : null}
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: active ? C.accent : C.muted }}>
+                    {acc.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
+
+      {/* ── Count bar ── */}
       <View
         style={{
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
-          paddingHorizontal: 16,
-          paddingTop: insets.top + 12,
-          paddingBottom: 10,
-          backgroundColor: C.bg,
-        }}
-      >
-        <Text style={{ fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.5 }}>Transactions</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Pressable
-            onPress={() => setMonth((m) => subMonths(m, 1))}
-            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Text style={{ fontSize: 16, color: C.text }}>‹</Text>
-          </Pressable>
-          <Text style={{ fontSize: 13, color: C.text, fontWeight: '600', minWidth: 76, textAlign: 'center' }}>
-            {format(month, 'MMM yyyy')}
-          </Text>
-          <Pressable
-            onPress={() => setMonth((m) => addMonths(m, 1))}
-            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Text style={{ fontSize: 16, color: C.text }}>›</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Filter chips */}
-      <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 8, gap: 8 }}>
-        {FILTERS.map((f) => (
-          <Pressable
-            key={f.key}
-            onPress={() => setTypeFilter(f.key)}
-            style={{
-              paddingHorizontal: 14,
-              paddingVertical: 6,
-              borderRadius: 20,
-              backgroundColor: typeFilter === f.key ? C.accent : C.border,
-              shadowColor: C.accent,
-              shadowOpacity: typeFilter === f.key ? 0.45 : 0,
-              shadowRadius: 8,
-              elevation: typeFilter === f.key ? 3 : 0,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: '500',
-                color: typeFilter === f.key ? '#fff' : C.muted,
-              }}
-            >
-              {f.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {/* Summary strip */}
-      <View
-        style={{
-          flexDirection: 'row',
-          backgroundColor: C.card,
+          paddingHorizontal: 20,
+          paddingVertical: 10,
           borderBottomWidth: 1,
           borderBottomColor: C.border,
         }}
       >
-        {[
-          { label: 'Income', value: formatMoney(income, baseCurrency), color: C.income },
-          { label: 'Expenses', value: formatMoney(expenses, baseCurrency), color: C.expense },
-          { label: 'Net', value: formatMoney(net, baseCurrency), color: C.text },
-        ].map((s, i) => (
-          <View
-            key={s.label}
-            style={{
-              flex: 1,
-              alignItems: 'center',
-              paddingVertical: 12,
-              gap: 3,
-              borderTopWidth: 2,
-              borderTopColor: s.label === 'Net' ? C.border : s.color,
-              borderLeftWidth: i > 0 ? 1 : 0,
-              borderLeftColor: C.border,
-            }}
-          >
-            <Text style={{ fontSize: 11, color: C.muted, fontWeight: '500' }}>{s.label}</Text>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: s.color }}>{s.value}</Text>
-          </View>
-        ))}
+        <Text style={{ fontSize: 11, color: C.muted }}>
+          {txCount} transaction{txCount !== 1 ? 's' : ''}
+        </Text>
+        <Text style={{ fontSize: 11, color: C.muted }}>
+          {format(month, 'MMMM yyyy')}
+        </Text>
       </View>
 
-      {/* Transaction list */}
+      {/* ── Transaction List ── */}
       {query.isLoading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={C.accent} />
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
           renderSectionHeader={({ section }) => (
-            <View style={{ backgroundColor: C.bg, paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 2, height: 12, backgroundColor: C.accent, borderRadius: 1 }} />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 0.3 }}>
-                {section.title}
+            <View
+              style={{
+                backgroundColor: C.bg,
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 3, height: 14, backgroundColor: C.accent, borderRadius: 2 }} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: C.sub, letterSpacing: 0.3 }}>
+                  {section.title}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 11, color: C.muted }}>
+                {section.data.length} item{section.data.length !== 1 ? 's' : ''}
               </Text>
             </View>
           )}
@@ -268,43 +390,48 @@ export default function TransactionsScreen() {
           onEndReached={onEndReached}
           onEndReachedThreshold={0.3}
           ListFooterComponent={
-            query.isFetchingNextPage ? <ActivityIndicator style={{ padding: 16 }} /> : null
+            query.isFetchingNextPage ? <ActivityIndicator style={{ padding: 16 }} color={C.accent} /> : null
           }
           ListEmptyComponent={
-            <Text style={{ color: C.muted, textAlign: 'center', padding: 40 }}>
-              No transactions found.
-            </Text>
+            <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+              <Ionicons name="receipt-outline" size={40} color={C.border} />
+              <Text style={{ color: C.muted, fontSize: 14, marginTop: 12 }}>No transactions found</Text>
+              <Text style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>
+                Tap + to add your first one
+              </Text>
+            </View>
           }
-          contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
         />
       )}
 
-      {/* FAB */}
+      {/* ── FAB ── */}
       <Pressable
         onPress={openModal}
         style={{
           position: 'absolute',
           bottom: insets.bottom + 24,
-          right: 24,
-          width: 56,
-          height: 56,
-          borderRadius: 28,
+          right: 20,
+          width: 54,
+          height: 54,
+          borderRadius: 16,
           backgroundColor: C.accent,
           alignItems: 'center',
           justifyContent: 'center',
           shadowColor: C.accent,
-          shadowOpacity: 0.55,
-          shadowRadius: 18,
+          shadowOpacity: 0.5,
+          shadowOffset: { width: 0, height: 4 },
+          shadowRadius: 14,
           elevation: 8,
         }}
       >
-        <Text style={{ color: '#fff', fontSize: 28, lineHeight: 32 }}>+</Text>
+        <Ionicons name="add" size={28} color="#fff" />
       </Pressable>
 
-      {/* Add Transaction Modal */}
+      {/* ── Add Transaction Modal ── */}
       <Modal visible={showAdd} transparent animationType="none" onRequestClose={closeModal}>
         <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)' }}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)' }}
           onPress={closeModal}
         />
         <Animated.View
@@ -314,17 +441,28 @@ export default function TransactionsScreen() {
             left: 0,
             right: 0,
             backgroundColor: C.card,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            padding: 24,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            borderWidth: 1,
+            borderBottomWidth: 0,
+            borderColor: C.border,
+            paddingHorizontal: 24,
+            paddingTop: 16,
             paddingBottom: insets.bottom + 24,
             transform: [{ translateY: slideAnim }],
           }}
         >
+          {/* Drag indicator */}
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 20 }} />
-          <Text style={{ fontSize: 18, fontWeight: '700', color: C.text, marginBottom: 20 }}>
-            Add Transaction
-          </Text>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>
+              Add Transaction
+            </Text>
+            <Pressable onPress={closeModal} style={{ padding: 4 }}>
+              <Ionicons name="close" size={22} color={C.muted} />
+            </Pressable>
+          </View>
 
           {/* Type toggle */}
           <Controller
@@ -334,76 +472,169 @@ export default function TransactionsScreen() {
               <View
                 style={{
                   flexDirection: 'row',
-                  backgroundColor: C.border,
-                  borderRadius: 8,
+                  backgroundColor: C.inputBg,
+                  borderRadius: 12,
                   padding: 4,
-                  marginBottom: 16,
+                  marginBottom: 18,
                   gap: 4,
+                  borderWidth: 1,
+                  borderColor: C.border,
                 }}
               >
-                {(['expense', 'income', 'transfer'] as const).map((t) => (
-                  <Pressable
-                    key={t}
-                    onPress={() => field.onChange(t)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 8,
-                      borderRadius: 6,
-                      alignItems: 'center',
-                      backgroundColor: field.value === t ? C.accent + '25' : 'transparent',
-                      shadowColor: field.value === t ? C.accent : 'transparent',
-                      shadowOpacity: 0.06,
-                      shadowRadius: 4,
-                      elevation: field.value === t ? 1 : 0,
-                    }}
-                  >
-                    <Text
+                {(['expense', 'income', 'transfer'] as const).map((t) => {
+                  const active = field.value === t;
+                  const tColor =
+                    t === 'income' ? C.income : t === 'expense' ? C.expense : C.sub;
+                  return (
+                    <Pressable
+                      key={t}
+                      onPress={() => field.onChange(t)}
                       style={{
-                        fontSize: 13,
-                        fontWeight: '600',
-                        color:
-                          field.value === t
-                            ? t === 'income'
-                              ? C.income
-                              : t === 'expense'
-                                ? C.expense
-                                : C.text
-                            : C.muted,
-                        textTransform: 'capitalize',
+                        flex: 1,
+                        paddingVertical: 9,
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        backgroundColor: active ? tColor + '18' : 'transparent',
+                        borderWidth: active ? 1 : 0,
+                        borderColor: active ? tColor + '40' : 'transparent',
                       }}
                     >
-                      {t}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: '600',
+                          color: active ? tColor : C.muted,
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        {t}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             )}
           />
 
-          {/* Account picker */}
-          {accounts.length > 0 && (
+          {/* Amount input */}
+          <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6 }}>
+            Amount
+          </Text>
+          <Controller
+            control={control}
+            name="amount"
+            render={({ field }) => (
+              <TextInput
+                placeholder="0.00"
+                placeholderTextColor={C.muted}
+                keyboardType="decimal-pad"
+                value={field.value}
+                onChangeText={field.onChange}
+                style={{
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 14,
+                  fontSize: 22,
+                  fontWeight: '700',
+                  marginBottom: 16,
+                  color: C.text,
+                  backgroundColor: C.inputBg,
+                  letterSpacing: -0.5,
+                }}
+              />
+            )}
+          />
+
+          {/* Account picker (From Account for transfers) */}
+          {activeAccounts.length > 0 && (
             <Controller
               control={control}
               name="account_id"
               render={({ field }) => (
-                <View style={{ marginBottom: 12 }}>
-                  <Text style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Account</Text>
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6 }}>
+                    {txType === 'transfer' ? 'From Account' : 'Account'}
+                  </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {accounts.map((acc) => {
+                    {activeAccounts.map((acc) => {
                       const active = field.value === acc.id;
                       return (
                         <Pressable
                           key={acc.id}
                           onPress={() => field.onChange(acc.id)}
                           style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
                             paddingHorizontal: 14,
-                            paddingVertical: 7,
-                            borderRadius: 20,
-                            borderWidth: 1.5,
-                            borderColor: active ? C.accent : C.border,
-                            backgroundColor: active ? C.accent + '15' : C.card,
+                            paddingVertical: 8,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: active ? C.accent + '50' : C.border,
+                            backgroundColor: active ? C.accent + '14' : C.inputBg,
                           }}
                         >
+                          {acc.icon ? (
+                            <Text style={{ fontSize: 12 }}>{acc.icon}</Text>
+                          ) : (
+                            <Ionicons
+                              name={acc.type === 'bank' ? 'business-outline' : acc.type === 'card' ? 'card-outline' : acc.type === 'cash' ? 'cash-outline' : 'wallet-outline'}
+                              size={14}
+                              color={active ? C.accent : C.muted}
+                            />
+                          )}
+                          <Text style={{ fontSize: 13, fontWeight: '500', color: active ? C.accent : C.text }}>
+                            {acc.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+            />
+          )}
+
+          {/* To Account picker (transfer only) */}
+          {txType === 'transfer' && activeAccounts.length > 0 && (
+            <Controller
+              control={control}
+              name="to_account_id"
+              render={({ field }) => (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6 }}>
+                    To Account
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {activeAccounts.map((acc) => {
+                      const active = field.value === acc.id;
+                      return (
+                        <Pressable
+                          key={acc.id}
+                          onPress={() => field.onChange(acc.id)}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: active ? C.accent + '50' : C.border,
+                            backgroundColor: active ? C.accent + '14' : C.inputBg,
+                          }}
+                        >
+                          {acc.icon ? (
+                            <Text style={{ fontSize: 12 }}>{acc.icon}</Text>
+                          ) : (
+                            <Ionicons
+                              name={acc.type === 'bank' ? 'business-outline' : acc.type === 'card' ? 'card-outline' : acc.type === 'cash' ? 'cash-outline' : 'wallet-outline'}
+                              size={14}
+                              color={active ? C.accent : C.muted}
+                            />
+                          )}
                           <Text style={{ fontSize: 13, fontWeight: '500', color: active ? C.accent : C.text }}>
                             {acc.name}
                           </Text>
@@ -424,8 +655,10 @@ export default function TransactionsScreen() {
               render={({ field }) => {
                 const filtered = (categoriesQuery.data ?? []).filter((c) => c.kind === txType);
                 return (
-                  <View style={{ marginBottom: 12 }}>
-                    <Text style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Category</Text>
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6 }}>
+                      Category
+                    </Text>
                     <CategoryPicker
                       categories={filtered}
                       value={field.value || null}
@@ -437,39 +670,15 @@ export default function TransactionsScreen() {
             />
           )}
 
-          {/* Amount */}
-          <Controller
-            control={control}
-            name="amount"
-            render={({ field }) => (
-              <TextInput
-                placeholder="Amount"
-                placeholderTextColor={C.muted}
-                keyboardType="decimal-pad"
-                value={field.value}
-                onChangeText={field.onChange}
-                style={{
-                  borderWidth: 1,
-                  borderColor: C.border,
-                  borderRadius: 8,
-                  paddingHorizontal: 12,
-                  paddingVertical: 12,
-                  fontSize: 16,
-                  marginBottom: 12,
-                  color: C.text,
-                  backgroundColor: C.bg,
-                }}
-              />
-            )}
-          />
-
           {/* Currency */}
           <Controller
             control={control}
             name="currency"
             render={({ field }) => (
-              <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Currency</Text>
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6 }}>
+                  Currency
+                </Text>
                 <CurrencyPicker value={field.value} onChange={field.onChange} />
               </View>
             )}
@@ -488,34 +697,44 @@ export default function TransactionsScreen() {
                 style={{
                   borderWidth: 1,
                   borderColor: C.border,
-                  borderRadius: 8,
-                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
                   paddingVertical: 12,
-                  fontSize: 16,
+                  fontSize: 14,
                   marginBottom: 20,
                   color: C.text,
-                  backgroundColor: C.bg,
+                  backgroundColor: C.inputBg,
                 }}
               />
             )}
           />
 
+          {/* Save button */}
           <Pressable
             onPress={onSave}
             disabled={addMutation.isPending}
             style={{
               backgroundColor: C.accent,
-              paddingVertical: 14,
-              borderRadius: 8,
+              paddingVertical: 15,
+              borderRadius: 12,
               alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: 8,
               shadowColor: C.accent,
-              shadowOpacity: 0.45,
-              shadowRadius: 14,
+              shadowOpacity: 0.4,
+              shadowOffset: { width: 0, height: 4 },
+              shadowRadius: 12,
               elevation: 6,
             }}
           >
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
-              {addMutation.isPending ? 'Saving…' : 'Save'}
+            {addMutation.isPending ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Ionicons name="checkmark-circle" size={20} color="#fff" />
+            )}
+            <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>
+              {addMutation.isPending ? 'Saving…' : 'Save Transaction'}
             </Text>
           </Pressable>
         </Animated.View>

@@ -15,14 +15,36 @@ type Props = {
   categories: Category[];
   value: string | null;
   onChange: (id: string | null) => void;
+  onAdd?: () => void;
 };
 
-export function CategoryPicker({ categories, value, onChange }: Props) {
+export function CategoryPicker({ categories, value, onChange, onAdd }: Props) {
   if (categories.length === 0) {
     return (
-      <Text style={{ fontSize: 13, color: C.muted, fontStyle: 'italic' }}>
-        No categories yet. Add some in Budgets.
-      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <Text style={{ fontSize: 13, color: C.muted, fontStyle: 'italic' }}>
+          No categories yet.
+        </Text>
+        {onAdd && (
+          <Pressable
+            onPress={onAdd}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              borderRadius: 20,
+              borderWidth: 1.5,
+              borderColor: C.accent + '50',
+              backgroundColor: C.accent + '10',
+            }}
+          >
+            <Text style={{ fontSize: 15, color: C.accent, fontWeight: '700' }}>+</Text>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: C.accent }}>Add</Text>
+          </Pressable>
+        )}
+      </View>
     );
   }
 
@@ -53,6 +75,25 @@ export function CategoryPicker({ categories, value, onChange }: Props) {
           </Pressable>
         );
       })}
+      {onAdd && (
+        <Pressable
+          onPress={onAdd}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 5,
+            paddingHorizontal: 12,
+            paddingVertical: 7,
+            borderRadius: 20,
+            borderWidth: 1.5,
+            borderColor: C.accent + '50',
+            backgroundColor: C.accent + '10',
+          }}
+        >
+          <Text style={{ fontSize: 15, color: C.accent, fontWeight: '700' }}>+</Text>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: C.accent }}>Add</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
