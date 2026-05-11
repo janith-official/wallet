@@ -3,13 +3,16 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Image,
   Modal,
   Pressable,
   ScrollView,
+  Text as RNText,
   TextInput,
   View,
 } from 'react-native';
 import { Text } from '@/components/Text';
+import { InfoTooltip } from '@/components/InfoTooltip';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { format } from 'date-fns';
@@ -245,8 +248,23 @@ export default function BudgetsScreen() {
       {/* ── Header ── */}
       <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 10, paddingBottom: 14 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Text style={{ fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.8 }}>Budgets</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Image
+                source={require('../../assets/icon.png')}
+                style={{ width: 68, height: 68, borderRadius: 20 }}
+              />
+              <View style={{ gap: 2 }}>
+                <RNText style={{ fontSize: 11, fontFamily: 'RussoOne_400Regular', letterSpacing: 1.5 }}>
+                  <RNText style={{ color: C.sub }}>Sav</RNText>
+                  <RNText style={{ color: C.accent }}>vo</RNText>
+                </RNText>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.5 }}>
+                  Budgets
+                </Text>
+              </View>
+            </View>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <InfoTooltip text="Set monthly or weekly spending limits by category. Progress bars update automatically as you add transactions." />
             <Pressable
               onPress={() => setShowCatList(true)}
               style={{

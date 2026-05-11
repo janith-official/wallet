@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Image, Pressable, ScrollView, Text as RNText, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -124,46 +124,68 @@ export default function DashboardScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* ── Header ── */}
-      <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 12, paddingBottom: 20 }}>
-        <Text style={{ fontSize: 12, color: C.muted, letterSpacing: 0.4, marginBottom: 2 }}>
-          {session?.user.email}
-        </Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 28, fontWeight: '800', color: C.text, letterSpacing: -0.8 }}>
-            {format(month, 'MMMM yyyy')}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable
-              onPress={() => setMonth((m) => subMonths(m, 1))}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 12,
-                backgroundColor: C.card,
-                borderWidth: 1,
-                borderColor: C.border,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Ionicons name="chevron-back" size={18} color={C.sub} />
-            </Pressable>
-            <Pressable
-              onPress={() => setMonth((m) => addMonths(m, 1))}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 12,
-                backgroundColor: C.card,
-                borderWidth: 1,
-                borderColor: C.border,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Ionicons name="chevron-forward" size={18} color={C.sub} />
-            </Pressable>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 20,
+          paddingTop: insets.top + 12,
+          paddingBottom: 18,
+        }}
+      >
+        {/* Brand: logo + name */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={{ width: 68, height: 68, borderRadius: 20 }}
+          />
+          <View style={{ gap: 1 }}>
+            <RNText style={{ fontSize: 36, fontFamily: 'RussoOne_400Regular', letterSpacing: 2, lineHeight: 42 }}>
+              <RNText style={{ color: C.text }}>Sav</RNText>
+              <RNText style={{ color: C.accent }}>vo</RNText>
+            </RNText>
+            <RNText style={{ fontSize: 13, fontFamily: 'Exo2_300Light', color: C.muted, letterSpacing: 1.0, lineHeight: 17 }}>
+              Your money, your story.
+            </RNText>
           </View>
+        </View>
+
+        {/* Month navigator */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: C.card,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: C.border,
+            overflow: 'hidden',
+          }}
+        >
+          <Pressable
+            onPress={() => setMonth((m) => subMonths(m, 1))}
+            style={({ pressed }) => ({
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              backgroundColor: pressed ? C.border : 'transparent',
+            })}
+          >
+            <Ionicons name="chevron-back" size={16} color={C.sub} />
+          </Pressable>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: C.sub, minWidth: 80, textAlign: 'center' }}>
+            {format(month, 'MMM yyyy')}
+          </Text>
+          <Pressable
+            onPress={() => setMonth((m) => addMonths(m, 1))}
+            style={({ pressed }) => ({
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              backgroundColor: pressed ? C.border : 'transparent',
+            })}
+          >
+            <Ionicons name="chevron-forward" size={16} color={C.sub} />
+          </Pressable>
         </View>
       </View>
 

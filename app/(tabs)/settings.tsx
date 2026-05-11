@@ -8,10 +8,12 @@ import {
   Pressable,
   ScrollView,
   Switch,
+  Text as RNText,
   TextInput,
   View,
 } from 'react-native';
 import { Text } from '@/components/Text';
+import { InfoTooltip } from '@/components/InfoTooltip';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -282,7 +284,21 @@ export default function SettingsScreen() {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {/* ── Header ── */}
       <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 10, paddingBottom: 14 }}>
-        <Text style={{ fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.8 }}>Settings</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={{ width: 68, height: 68, borderRadius: 20 }}
+          />
+          <View style={{ gap: 2 }}>
+            <RNText style={{ fontSize: 11, fontFamily: 'RussoOne_400Regular', letterSpacing: 1.5 }}>
+              <RNText style={{ color: C.sub }}>Sav</RNText>
+              <RNText style={{ color: C.accent }}>vo</RNText>
+            </RNText>
+            <Text style={{ fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.5 }}>
+              Settings
+            </Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -364,7 +380,13 @@ export default function SettingsScreen() {
 
         {/* ── Accounts Section ── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <SectionHeader icon="wallet-outline" label="Accounts" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="wallet-outline" size={15} color={C.accent} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.sub, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+              Accounts
+            </Text>
+            <InfoTooltip text="Add your bank accounts, cash wallets, and cards. Balances update automatically as you record transactions." />
+          </View>
           <Pressable
             onPress={() => openWithData('new')}
             style={{
@@ -436,23 +458,6 @@ export default function SettingsScreen() {
           </View>
         )}
 
-        {/* ── App Info ── */}
-        <SectionHeader icon="information-circle-outline" label="App" />
-        <View
-          style={{
-            backgroundColor: C.card,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: C.border,
-            overflow: 'hidden',
-            marginBottom: 24,
-          }}
-        >
-          <InfoRow icon="code-slash-outline" label="Version" value={version || '—'} />
-          <View style={{ height: 1, backgroundColor: C.border, marginLeft: 46 }} />
-          <InfoRow icon="logo-react" label="Framework" value="Expo + React Native" />
-        </View>
-
         {/* ── Sign Out ── */}
         <Pressable
           onPress={signOut}
@@ -472,6 +477,39 @@ export default function SettingsScreen() {
           <Ionicons name="log-out-outline" size={18} color={C.expense} />
           <Text style={{ color: C.expense, fontWeight: '700', fontSize: 15 }}>Sign Out</Text>
         </Pressable>
+
+        {/* ── About ── */}
+        <View style={{ alignItems: 'center', paddingTop: 36, paddingBottom: 8, gap: 8 }}>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={{ width: 56, height: 56, borderRadius: 16 }}
+          />
+          <RNText
+            style={{
+              fontSize: 22,
+              fontFamily: 'RussoOne_400Regular',
+              letterSpacing: 2,
+              marginTop: 4,
+            }}
+          >
+            <RNText style={{ color: C.text }}>Sav</RNText>
+            <RNText style={{ color: C.accent }}>vo</RNText>
+          </RNText>
+          <RNText
+            style={{
+              fontSize: 11,
+              fontFamily: 'Exo2_300Light',
+              color: C.muted,
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+            }}
+          >
+            Your money, your story.
+          </RNText>
+          {version ? (
+            <Text style={{ fontSize: 12, color: C.muted }}>v{version}</Text>
+          ) : null}
+        </View>
       </ScrollView>
 
       {/* ── Edit Profile Modal (full-screen) ── */}

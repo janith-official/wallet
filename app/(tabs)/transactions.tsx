@@ -4,14 +4,17 @@ import {
   Alert,
   Animated,
   Dimensions,
+  Image,
   Modal,
   Pressable,
   ScrollView,
   SectionList,
+  Text as RNText,
   TextInput,
   View,
 } from 'react-native';
 import { Text } from '@/components/Text';
+import { InfoTooltip } from '@/components/InfoTooltip';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -176,7 +179,21 @@ export default function TransactionsScreen() {
       {/* ── Header ── */}
       <View style={{ paddingHorizontal: 20, paddingTop: insets.top + 10, paddingBottom: 14, backgroundColor: C.bg }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Text style={{ fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.8 }}>Transactions</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Image
+                source={require('../../assets/icon.png')}
+                style={{ width: 68, height: 68, borderRadius: 20 }}
+              />
+              <View style={{ gap: 2 }}>
+                <RNText style={{ fontSize: 11, fontFamily: 'RussoOne_400Regular', letterSpacing: 1.5 }}>
+                  <RNText style={{ color: C.sub }}>Sav</RNText>
+                  <RNText style={{ color: C.accent }}>vo</RNText>
+                </RNText>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.5 }}>
+                  Transactions
+                </Text>
+              </View>
+            </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Pressable
               onPress={() => setMonth((m) => subMonths(m, 1))}
@@ -211,6 +228,7 @@ export default function TransactionsScreen() {
             >
               <Ionicons name="chevron-forward" size={16} color={C.sub} />
             </Pressable>
+            <InfoTooltip text="Log every payment, income, or transfer. Use filters to review spending by category or account." />
           </View>
         </View>
 

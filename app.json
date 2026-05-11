@@ -1,27 +1,27 @@
 {
   "expo": {
-    "name": "Wallet",
-    "slug": "wallet",
-    "scheme": "wallet",
+    "name": "Savvo",
+    "slug": "savvo",
+    "scheme": "savvo",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0f0f0f"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.example.wallet"
+      "bundleIdentifier": "com.savvo.app"
     },
     "android": {
-      "package": "com.example.wallet",
+      "package": "com.savvo.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0f0f0f"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false

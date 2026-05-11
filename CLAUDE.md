@@ -51,6 +51,8 @@ Two route groups controlled by the auth gate in `app/_layout.tsx`:
 - `app/(tabs)/` — Dashboard, Transactions, Budgets, Settings (authenticated)
 - `app/transaction/[id].tsx` — transaction detail route (placeholder)
 
+The tabs use `@react-navigation/material-top-tabs` (via `createMaterialTopTabNavigator` + `withLayoutContext`) positioned at the bottom, enabling native swipe-between-tabs. The `position` animated value from `MaterialTopTabBarProps` drives the pill indicator in real-time during swipes.
+
 ### Provider hierarchy (app/_layout.tsx)
 
 `GestureHandlerRootView` → `SafeAreaProvider` → `QueryClientProvider` (30s staleTime, 1 retry) → `AuthProvider` → `ProfileProvider` → `AuthGate` (Stack)
@@ -106,7 +108,7 @@ Both should be scheduled via Supabase Dashboard → Database → Cron (daily). E
 - `CurrencyPicker` — toggle between supported currencies (USD, LKR, SGD)
 - `ProgressBar` — budget progress with red/amber/green color coding
 - `SettingsRow` / `SettingsSeparator` — iOS-style settings list items
-- `TabBar` — custom animated bottom tab bar with sliding pill indicator
+- `TabBar` — custom animated tab bar (`MaterialTopTabBarProps`): sliding accent pill + top-line indicator driven by `position` anim value, per-icon bounce on tap, `LinearGradient` 3D bar, safe-area aware
 - `TransactionRow` — transaction list item with category, amount, date
 
 ## UI Theme

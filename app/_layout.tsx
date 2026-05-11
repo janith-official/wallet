@@ -13,6 +13,8 @@ import {
   SpaceGrotesk_600SemiBold,
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
+import { Exo2_300Light } from '@expo-google-fonts/exo-2';
+import { RussoOne_400Regular } from '@expo-google-fonts/russo-one';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -39,6 +41,8 @@ export default function RootLayout() {
     SpaceGrotesk_500Medium,
     SpaceGrotesk_600SemiBold,
     SpaceGrotesk_700Bold,
+    Exo2_300Light,
+    RussoOne_400Regular,
   });
 
   if (!fontsLoaded) return null;

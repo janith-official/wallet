@@ -12,6 +12,9 @@
     "test": "jest"
   },
   "dependencies": {
+    "@expo-google-fonts/exo-2": "^0.4.2",
+    "@expo-google-fonts/raleway": "^0.4.2",
+    "@expo-google-fonts/russo-one": "^0.4.1",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@react-navigation/material-top-tabs": "^7.4.26",
     "@supabase/supabase-js": "^2.105.3",
