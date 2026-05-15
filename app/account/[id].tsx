@@ -11,28 +11,7 @@ import { useTransactions } from '@/features/transactions/useTransactions';
 import { TransactionRow } from '@/components/TransactionRow';
 import { formatMoney } from '@/lib/currency';
 import type { TransactionRowData } from '@/components/TransactionRow';
-
-const C = {
-  bg: '#0a0a0c',
-  card: '#141416',
-  border: '#1e1e24',
-  text: '#f0f0f5',
-  sub: '#b0b0be',
-  muted: '#5c5c70',
-  accent: '#dc2626',
-  expense: '#f87171',
-  income: '#34d399',
-  blue: '#60a5fa',
-  purple: '#a78bfa',
-  amber: '#f59e0b',
-};
-
-const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
-  bank: { icon: 'business-outline', color: C.blue },
-  cash: { icon: 'cash-outline', color: C.income },
-  card: { icon: 'card-outline', color: C.purple },
-  wallet: { icon: 'wallet-outline', color: C.amber },
-};
+import { useTheme } from '@/features/theme/ThemeContext';
 
 function groupByDate(items: TransactionRowData[]) {
   const map = new Map<string, TransactionRowData[]>();
@@ -45,6 +24,13 @@ function groupByDate(items: TransactionRowData[]) {
 }
 
 export default function AccountDetailScreen() {
+  const C = useTheme();
+  const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
+    bank: { icon: 'business-outline', color: C.blue },
+    cash: { icon: 'cash-outline', color: C.income },
+    card: { icon: 'card-outline', color: C.purple },
+    wallet: { icon: 'wallet-outline', color: C.amber },
+  };
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();

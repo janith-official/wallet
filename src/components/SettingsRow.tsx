@@ -1,14 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { Ionicons } from '@expo/vector-icons';
-
-const C = {
-  card: '#141416',
-  border: '#1e1e24',
-  text: '#f0f0f5',
-  muted: '#5c5c70',
-  sub: '#b0b0be',
-};
+import { useTheme } from '@/features/theme/ThemeContext';
 
 type Props = {
   label: string;
@@ -25,10 +18,13 @@ export function SettingsRow({
   value,
   onPress,
   showChevron = true,
-  labelColor = C.text,
+  labelColor,
   icon,
-  iconColor = C.sub,
+  iconColor,
 }: Props) {
+  const C = useTheme();
+  const resolvedLabelColor = labelColor ?? C.text;
+  const resolvedIconColor = iconColor ?? C.sub;
   return (
     <Pressable
       onPress={onPress}
@@ -41,8 +37,8 @@ export function SettingsRow({
         gap: 12,
       })}
     >
-      {icon && <Ionicons name={icon} size={18} color={iconColor} />}
-      <Text style={{ flex: 1, fontSize: 14, fontWeight: '500', color: labelColor }}>{label}</Text>
+      {icon && <Ionicons name={icon} size={18} color={resolvedIconColor} />}
+      <Text style={{ flex: 1, fontSize: 14, fontWeight: '500', color: resolvedLabelColor }}>{label}</Text>
       {value ? (
         <Text style={{ fontSize: 13, color: C.sub, marginRight: showChevron ? 4 : 0 }}>{value}</Text>
       ) : null}
@@ -52,5 +48,6 @@ export function SettingsRow({
 }
 
 export function SettingsSeparator() {
+  const C = useTheme();
   return <View style={{ height: 1, backgroundColor: C.border, marginLeft: 46 }} />;
 }

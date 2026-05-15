@@ -1,4 +1,5 @@
 import { Text } from '@/components/Text';
+import { useTheme } from '@/features/theme/ThemeContext';
 import { formatMoney } from '@/lib/currency';
 
 type Props = {
@@ -10,7 +11,8 @@ type Props = {
 };
 
 export function AmountText({ amount, currency, type, fontSize = 14, fontWeight = '600' }: Props) {
-  const color = type === 'income' ? '#22c55e' : type === 'expense' ? '#ef4444' : '#f9fafb';
+  const C = useTheme();
+  const color = type === 'income' ? C.income : type === 'expense' ? C.expense : C.text;
   const prefix = type === 'income' ? '+' : type === 'expense' ? '−' : '';
   return (
     <Text style={{ color, fontSize, fontWeight }}>

@@ -2,17 +2,9 @@ import { Pressable, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
+import { useTheme } from '@/features/theme/ThemeContext';
 import { CategoryIcon } from './CategoryIcon';
 import { AmountText } from './AmountText';
-
-const C = {
-  card: '#141416',
-  border: '#1e1e24',
-  text: '#f0f0f5',
-  sub: '#b0b0be',
-  muted: '#5c5c70',
-  blue: '#60a5fa',
-};
 
 export type TransactionRowData = {
   id: string;
@@ -33,6 +25,7 @@ type Props = {
 };
 
 export function TransactionRow({ item, onPress, showDate = false }: Props) {
+  const C = useTheme();
   const isTransfer = item.type === 'transfer';
 
   return (

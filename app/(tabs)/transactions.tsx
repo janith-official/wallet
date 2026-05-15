@@ -1,11 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -26,28 +27,17 @@ import { useBaseCurrency } from '@/features/profile/ProfileContext';
 import { useTransactions, useAddTransaction } from '@/features/transactions/useTransactions';
 import { useAccounts } from '@/features/profile/useProfile';
 import { useCategories } from '@/features/categories/useCategories';
+import { useFxRates } from '@/features/fx/useFxRates';
 import { TransactionRow } from '@/components/TransactionRow';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { CategoryPicker } from '@/components/CategoryPicker';
-import { formatMoney } from '@/lib/currency';
+import { formatMoney, convert } from '@/lib/currency';
+import { toast } from '@/components/Toast';
+import { useTheme } from '@/features/theme/ThemeContext';
 import type { TransactionRowData } from '@/components/TransactionRow';
 import type { SupportedCurrency } from '@/components/CurrencyPicker';
 
 const SCREEN_W = Dimensions.get('window').width;
-
-/* ── palette (matches dashboard) ── */
-const C = {
-  bg: '#0a0a0c',
-  card: '#141416',
-  border: '#1e1e24',
-  text: '#f0f0f5',
-  sub: '#b0b0be',
-  muted: '#5c5c70',
-  income: '#34d399',
-  expense: '#f87171',
-  accent: '#dc2626',
-  inputBg: '#0e0e10',
-};
 
 type TxType = 'all' | 'income' | 'expense' | 'transfer';
 const FILTERS: { key: TxType; label: string; icon: string }[] = [
@@ -78,6 +68,7 @@ function groupByDate(items: TransactionRowData[]) {
 }
 
 export default function TransactionsScreen() {
+  const C = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { session } = useAuth();
@@ -94,6 +85,7 @@ export default function TransactionsScreen() {
   const accountsQuery = useAccounts(userId);
   const accounts = accountsQuery.data ?? [];
   const categoriesQuery = useCategories(userId);
+  const fxRatesQuery = useFxRates();
 
   const allItems: TransactionRowData[] = (query.data?.pages ?? []).flat();
   const sections = groupByDate(allItems);
@@ -132,28 +124,38 @@ export default function TransactionsScreen() {
   const onSave = handleSubmit(async (values) => {
     const amount = parseFloat(values.amount);
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid amount', 'Enter a positive number.');
+      toast.error('Invalid amount', 'Enter a positive number.');
       return;
     }
     if (!values.account_id) {
-      Alert.alert('No account', 'Please select an account first from Settings.');
+      toast.warning('No account', 'Please select an account first from Settings.');
       return;
     }
     if (values.type === 'transfer') {
       if (!values.to_account_id) {
-        Alert.alert('Missing destination', 'Please select a destination account for the transfer.');
+        toast.warning('Missing destination', 'Please select a destination account for the transfer.');
         return;
       }
       if (values.account_id === values.to_account_id) {
-        Alert.alert('Same account', 'Source and destination accounts must be different.');
+        toast.warning('Same account', 'Source and destination accounts must be different.');
         return;
       }
     }
+    let amount_in_base = amount;
+    const rates = fxRatesQuery.data;
+    if (rates && values.currency !== baseCurrency) {
+      try {
+        amount_in_base = convert(amount, values.currency, baseCurrency, rates);
+      } catch {
+        // rates missing for this pair — fall back to 1:1
+      }
+    }
+
     try {
       await addMutation.mutateAsync({
         amount,
         currency: values.currency,
-        amount_in_base: amount,
+        amount_in_base,
         type: values.type,
         occurred_at: new Date().toISOString(),
         note: values.note || undefined,
@@ -164,7 +166,7 @@ export default function TransactionsScreen() {
       reset();
       closeModal();
     } catch (e: unknown) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save.');
+      toast.error('Save failed', e instanceof Error ? e.message : 'Failed to save.');
     }
   });
 
@@ -448,28 +450,27 @@ export default function TransactionsScreen() {
 
       {/* ── Add Transaction Modal ── */}
       <Modal visible={showAdd} transparent animationType="none" onRequestClose={closeModal}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)' }}
-          onPress={closeModal}
-        />
-        <Animated.View
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: C.card,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            borderWidth: 1,
-            borderBottomWidth: 0,
-            borderColor: C.border,
-            paddingHorizontal: 24,
-            paddingTop: 16,
-            paddingBottom: insets.bottom + 24,
-            transform: [{ translateY: slideAnim }],
-          }}
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          behavior="padding"
         >
+          <Pressable
+            style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.75)' }}
+            onPress={closeModal}
+          />
+          <Animated.View
+            style={{
+              backgroundColor: C.card,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderWidth: 1,
+              borderBottomWidth: 0,
+              borderColor: C.border,
+              paddingHorizontal: 24,
+              paddingTop: 16,
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
           {/* Drag indicator */}
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 20 }} />
 
@@ -482,6 +483,11 @@ export default function TransactionsScreen() {
             </Pressable>
           </View>
 
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          >
           {/* Type toggle */}
           <Controller
             control={control}
@@ -755,7 +761,9 @@ export default function TransactionsScreen() {
               {addMutation.isPending ? 'Saving…' : 'Save Transaction'}
             </Text>
           </Pressable>
-        </Animated.View>
+          </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

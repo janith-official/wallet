@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/Text';
+import { useTheme } from '@/features/theme/ThemeContext';
 
 type Props = {
   text: string;
@@ -9,13 +10,14 @@ type Props = {
   iconSize?: number;
 };
 
-export function InfoTooltip({ text, iconColor = '#52525b', iconSize = 17 }: Props) {
+export function InfoTooltip({ text, iconSize = 17 }: Props) {
+  const C = useTheme();
   const [visible, setVisible] = useState(false);
 
   return (
     <>
       <Pressable onPress={() => setVisible(true)} hitSlop={10}>
-        <Ionicons name="information-circle-outline" size={iconSize} color={iconColor} />
+        <Ionicons name="information-circle-outline" size={iconSize} color={C.muted} />
       </Pressable>
 
       <Modal
@@ -40,11 +42,11 @@ export function InfoTooltip({ text, iconColor = '#52525b', iconSize = 17 }: Prop
           <Pressable onPress={() => {}}>
             <View
               style={{
-                backgroundColor: '#18181c',
+                backgroundColor: C.card,
                 borderRadius: 16,
                 padding: 20,
                 borderWidth: 1,
-                borderColor: '#2a2a35',
+                borderColor: C.border,
                 gap: 12,
               }}
             >
@@ -52,14 +54,14 @@ export function InfoTooltip({ text, iconColor = '#52525b', iconSize = 17 }: Prop
                 <Ionicons
                   name="information-circle"
                   size={20}
-                  color="#dc2626"
+                  color={C.accent}
                   style={{ marginTop: 1 }}
                 />
-                <Text style={{ flex: 1, fontSize: 14, color: '#b0b0be', lineHeight: 21 }}>
+                <Text style={{ flex: 1, fontSize: 14, color: C.sub, lineHeight: 21 }}>
                   {text}
                 </Text>
               </View>
-              <Text style={{ fontSize: 11, color: '#52525b', textAlign: 'center' }}>
+              <Text style={{ fontSize: 11, color: C.muted, textAlign: 'center' }}>
                 Tap outside to dismiss
               </Text>
             </View>

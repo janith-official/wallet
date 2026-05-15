@@ -29,7 +29,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     enabled: !!userId,
   });
 
-  const baseCurrency = (profile?.base_currency ?? 'LKR') as SupportedCurrency;
+  const baseCurrency = profile?.base_currency ?? 'LKR';
 
   return (
     <ProfileContext.Provider value={{ baseCurrency }}>

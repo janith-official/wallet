@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import { useTheme } from '@/features/theme/ThemeContext';
 
 type Props = {
   icon?: string | null;
@@ -7,7 +8,8 @@ type Props = {
 };
 
 export function CategoryIcon({ icon, color, size = 36 }: Props) {
-  const bg = color ? color + '33' : '#2a2a2a';
+  const C = useTheme();
+  const bg = color ? color + '33' : C.border;
   return (
     <View
       style={{

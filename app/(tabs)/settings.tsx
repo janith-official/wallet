@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Switch,
@@ -36,35 +37,22 @@ import {
 } from '@/features/profile/useProfile';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { formatMoney } from '@/lib/currency';
+import { toast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
+import { UserGuide } from '@/components/UserGuide';
+import { useTheme, useThemeMode } from '@/features/theme/ThemeContext';
+import type { Palette } from '@/features/theme/ThemeContext';
 import type { Account } from '@/features/profile/useProfile';
 import type { SupportedCurrency } from '@/components/CurrencyPicker';
 
-/* ── palette (matches dashboard / transactions / budgets) ── */
-const C = {
-  bg: '#0a0a0c',
-  card: '#141416',
-  border: '#1e1e24',
-  text: '#f0f0f5',
-  sub: '#b0b0be',
-  muted: '#5c5c70',
-  accent: '#dc2626',
-  expense: '#f87171',
-  income: '#34d399',
-  inputBg: '#0e0e10',
-  blue: '#60a5fa',
-  purple: '#a78bfa',
-  amber: '#f59e0b',
-};
-
-const ACCOUNT_TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
-  bank: { icon: 'business-outline', color: C.blue },
-  cash: { icon: 'cash-outline', color: C.income },
-  card: { icon: 'card-outline', color: C.purple },
-  wallet: { icon: 'wallet-outline', color: C.amber },
-};
-
-function accountMeta(type: string) {
-  return ACCOUNT_TYPE_META[type] ?? { icon: 'wallet-outline' as const, color: C.sub };
+function accountMeta(type: string, C: Palette) {
+  const map: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string }> = {
+    bank:   { icon: 'business-outline', color: C.blue },
+    cash:   { icon: 'cash-outline',     color: C.income },
+    card:   { icon: 'card-outline',     color: C.purple },
+    wallet: { icon: 'wallet-outline',   color: C.amber },
+  };
+  return map[type] ?? { icon: 'wallet-outline' as const, color: C.sub };
 }
 
 const ICON_OPTIONS = ['💰', '💵', '💳', '🏦', '👛', '💎', '🪙', '📊'];
@@ -81,6 +69,8 @@ type AccountFormValues = {
 };
 
 export default function SettingsScreen() {
+  const C = useTheme();
+  const { isDark, toggle: toggleTheme } = useThemeMode();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { session } = useAuth();
@@ -100,6 +90,7 @@ export default function SettingsScreen() {
 
   const [editingAccount, setEditingAccount] = useState<Account | null | 'new'>(null);
   const slideAnim = useRef(new Animated.Value(600)).current;
+  const [showGuide, setShowGuide] = useState(false);
 
   // Edit Profile modal state
   const [showProfile, setShowProfile] = useState(false);
@@ -137,7 +128,7 @@ export default function SettingsScreen() {
       try {
         await uploadAvatar.mutateAsync(result.assets[0].uri);
       } catch (e: unknown) {
-        Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not upload image.');
+        toast.error('Upload failed', e instanceof Error ? e.message : 'Could not upload image.');
       }
     }
   };
@@ -154,24 +145,21 @@ export default function SettingsScreen() {
       const trimmedEmail = profileEmail.trim().toLowerCase();
       if (trimmedEmail && trimmedEmail !== email) {
         await changeEmail.mutateAsync(trimmedEmail);
-        Alert.alert(
-          'Confirmation required',
-          'A confirmation link has been sent to both your old and new email addresses. Please check your inbox.',
-        );
+        toast.info('Confirmation required', 'A confirmation link has been sent to both your old and new email addresses. Please check your inbox.');
       }
 
       // Save password if provided
       if (showPasswordFields && newPassword) {
         if (newPassword.length < 6) {
-          Alert.alert('Password too short', 'Password must be at least 6 characters.');
+          toast.warning('Password too short', 'Password must be at least 6 characters.');
           return;
         }
         if (newPassword !== confirmPassword) {
-          Alert.alert('Passwords do not match', 'Please make sure both fields match.');
+          toast.warning('Passwords do not match', 'Please make sure both fields match.');
           return;
         }
         await changePassword.mutateAsync(newPassword);
-        Alert.alert('Password updated', 'Your password has been changed successfully.');
+        toast.success('Password updated', 'Your password has been changed successfully.');
         setNewPassword('');
         setConfirmPassword('');
         setShowPasswordFields(false);
@@ -179,7 +167,7 @@ export default function SettingsScreen() {
 
       setShowProfile(false);
     } catch (e: unknown) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save changes.');
+      toast.error('Save failed', e instanceof Error ? e.message : 'Failed to save changes.');
     }
   };
 
@@ -215,7 +203,7 @@ export default function SettingsScreen() {
       reset({
         name: acc.name,
         type: acc.type,
-        currency: acc.currency as SupportedCurrency,
+        currency: acc.currency,
         opening_balance: String(acc.opening_balance),
         archived: acc.archived,
         icon: acc.icon ?? '',
@@ -239,7 +227,7 @@ export default function SettingsScreen() {
       });
       closeAccountModal();
     } catch (e: unknown) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save.');
+      toast.error('Save failed', e instanceof Error ? e.message : 'Failed to save.');
     }
   });
 
@@ -256,26 +244,21 @@ export default function SettingsScreen() {
   const confirmDeleteAccount = () => {
     const acc = editingAccount;
     if (!acc || acc === 'new') return;
-    Alert.alert(
-      'Delete Account',
-      `Are you sure you want to delete "${acc.name}"? Transactions linked to this account will be preserved.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteAccount.mutate(acc.id);
-            closeAccountModal();
-          },
-        },
-      ],
-    );
+    confirmDialog.show({
+      title: 'Delete Account',
+      message: `Are you sure you want to delete "${acc.name}"? Transactions linked to this account will be preserved.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => {
+        deleteAccount.mutate(acc.id);
+        closeAccountModal();
+      },
+    });
   };
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert('Sign out failed', error.message);
+    if (error) toast.error('Sign out failed', error.message);
   };
 
   const version = (Constants.expoConfig as { version?: string } | null)?.version ?? '';
@@ -376,6 +359,30 @@ export default function SettingsScreen() {
             value={profile?.base_currency ?? 'LKR'}
             onChange={(c) => updateProfile.mutate({ base_currency: c })}
           />
+
+          {/* Theme toggle */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              marginTop: 16,
+              paddingTop: 16,
+              borderTopWidth: 1,
+              borderTopColor: C.border,
+            }}
+          >
+            <Ionicons name={isDark ? 'moon-outline' : 'sunny-outline'} size={16} color={C.sub} />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: C.text, flex: 1 }}>
+              {isDark ? 'Dark Mode' : 'Light Mode'}
+            </Text>
+            <Switch
+              value={!isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: C.border, true: C.accent }}
+              thumbColor="#fff"
+            />
+          </View>
         </View>
 
         {/* ── Accounts Section ── */}
@@ -458,6 +465,46 @@ export default function SettingsScreen() {
           </View>
         )}
 
+        {/* ── User Guide ── */}
+        <Pressable
+          onPress={() => setShowGuide(true)}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            backgroundColor: C.card,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: C.border,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            marginBottom: 12,
+            opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <View
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              backgroundColor: C.accent + '18',
+              borderWidth: 1,
+              borderColor: C.accent + '35',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="book-outline" size={17} color={C.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: C.text }}>User Guide</Text>
+            <Text style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+              How to use every feature in Savvo
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={C.muted} />
+        </Pressable>
+
         {/* ── Sign Out ── */}
         <Pressable
           onPress={signOut}
@@ -511,6 +558,9 @@ export default function SettingsScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      {/* ── User Guide Modal ── */}
+      <UserGuide visible={showGuide} onClose={() => setShowGuide(false)} />
 
       {/* ── Edit Profile Modal (full-screen) ── */}
       <Modal visible={showProfile} animationType="slide" onRequestClose={() => setShowProfile(false)}>
@@ -781,23 +831,26 @@ export default function SettingsScreen() {
 
       {/* ── Account Modal ── */}
       <Modal visible={editingAccount !== null} transparent animationType="none" onRequestClose={closeAccountModal}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)' }} onPress={closeAccountModal} />
-        <Animated.View
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: C.card,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            borderWidth: 1,
-            borderBottomWidth: 0,
-            borderColor: C.border,
-            paddingTop: 16,
-            transform: [{ translateY: slideAnim }],
-          }}
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          behavior="padding"
         >
+          <Pressable
+            style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.75)' }}
+            onPress={closeAccountModal}
+          />
+          <Animated.View
+            style={{
+              backgroundColor: C.card,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderWidth: 1,
+              borderBottomWidth: 0,
+              borderColor: C.border,
+              paddingTop: 16,
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
           <View
             style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 20 }}
           />
@@ -860,7 +913,7 @@ export default function SettingsScreen() {
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
                   {(['bank', 'cash', 'card', 'wallet'] as const).map((t) => {
                     const active = field.value === t;
-                    const meta = accountMeta(t);
+                    const meta = accountMeta(t, C);
                     return (
                       <Pressable
                         key={t}
@@ -1091,7 +1144,8 @@ export default function SettingsScreen() {
               </Pressable>
             )}
           </ScrollView>
-        </Animated.View>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1100,6 +1154,7 @@ export default function SettingsScreen() {
 /* ── Helper Components ── */
 
 function SectionHeader({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
+  const C = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
       <Ionicons name={icon} size={15} color={C.accent} />
@@ -1127,7 +1182,8 @@ function AccountCard({
   onMoveDown?: () => void;
   dimmed?: boolean;
 }) {
-  const meta = accountMeta(account.type);
+  const C = useTheme();
+  const meta = accountMeta(account.type, C);
   const displayColor = account.color || meta.color;
   const displayBalance = balance ?? account.opening_balance;
   return (
@@ -1203,6 +1259,7 @@ function AccountCard({
 }
 
 function InfoRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
+  const C = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
       <Ionicons name={icon} size={18} color={C.sub} />

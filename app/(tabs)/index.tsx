@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { ActivityIndicator, Dimensions, Image, Pressable, ScrollView, Text as RNText, View } from 'react-native';
 import { Text } from '@/components/Text';
 import { useRouter } from 'expo-router';
+import { TourOverlay, TOUR_STEPS } from '@/components/TourOverlay';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addMonths, format, getDaysInMonth, subMonths } from 'date-fns';
 import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
@@ -13,29 +14,15 @@ import { useDashboard } from '@/features/dashboard/useDashboard';
 import { useAccountBalances } from '@/features/profile/useProfile';
 import { TransactionRow } from '@/components/TransactionRow';
 import { formatMoney } from '@/lib/currency';
+import { useTheme } from '@/features/theme/ThemeContext';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CARD_MARGIN = 16;
 const CARD_INNER = SCREEN_W - CARD_MARGIN * 2 - 40; // chart usable width (card padding 20*2)
 
-/* ── palette ── */
-const C = {
-  bg: '#0a0a0c',
-  card: '#141416',
-  border: '#1e1e24',
-  text: '#f0f0f5',
-  sub: '#b0b0be',
-  muted: '#5c5c70',
-  income: '#34d399',
-  expense: '#f87171',
-  accent: '#dc2626',
-  purple: '#a78bfa',
-  blue: '#60a5fa',
-  cyan: '#22d3ee',
-};
-
 /* ── simple card ── */
 function Card({ children, style }: { children: React.ReactNode; style?: object }) {
+  const C = useTheme();
   return (
     <View
       style={{
@@ -53,6 +40,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: object }
 }
 
 function SectionLabel({ title, icon }: { title: string; icon: string }) {
+  const C = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
       <Ionicons name={icon as any} size={15} color={C.accent} />
@@ -64,11 +52,25 @@ function SectionLabel({ title, icon }: { title: string; icon: string }) {
 }
 
 export default function DashboardScreen() {
+  const C = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, hasSeenOnboarding, markOnboardingSeen } = useAuth();
   const userId = session?.user.id ?? '';
   const [month, setMonth] = useState(new Date());
+  const [tourStep, setTourStep] = useState(0);
+
+  const handleTourNext = useCallback(async () => {
+    if (tourStep < TOUR_STEPS.length - 1) {
+      setTourStep((s) => s + 1);
+    } else {
+      await markOnboardingSeen();
+    }
+  }, [tourStep, markOnboardingSeen]);
+
+  const handleTourSkip = useCallback(async () => {
+    await markOnboardingSeen();
+  }, [markOnboardingSeen]);
   const baseCurrency = useBaseCurrency();
 
   const { transactions, accounts, income, expenses, net, categoryTotals, recentTransactions } =
@@ -118,8 +120,9 @@ export default function DashboardScreen() {
   const isLoading = transactions.isLoading;
 
   return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
     <ScrollView
-      style={{ flex: 1, backgroundColor: C.bg }}
+      style={{ flex: 1 }}
       contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
       showsVerticalScrollIndicator={false}
     >
@@ -552,5 +555,12 @@ export default function DashboardScreen() {
         </>
       )}
     </ScrollView>
+    <TourOverlay
+      visible={hasSeenOnboarding === false}
+      currentStep={tourStep}
+      onNext={handleTourNext}
+      onSkip={handleTourSkip}
+    />
+    </View>
   );
 }

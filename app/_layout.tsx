@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '@/features/auth/AuthProvider';
 import { ProfileProvider } from '@/features/profile/ProfileContext';
+import { ThemeProvider, useThemeMode } from '@/features/theme/ThemeContext';
+import { ToastContainer } from '@/components/Toast';
+import { ConfirmDialogContainer } from '@/components/ConfirmDialog';
 import {
   useFonts,
   SpaceGrotesk_400Regular,
@@ -27,12 +30,33 @@ function AuthGate() {
 
   useEffect(() => {
     if (loading) return;
+
     const inAuthGroup = segments[0] === '(auth)';
-    if (!session && !inAuthGroup) router.replace('/(auth)/sign-in');
-    if (session && inAuthGroup) router.replace('/(tabs)');
+
+    if (!session) {
+      if (!inAuthGroup) router.replace('/(auth)/sign-in');
+      return;
+    }
+
+    // Authenticated — always go to tabs; TourOverlay handles first-launch tour
+    if (inAuthGroup) {
+      router.replace('/(tabs)');
+    }
   }, [session, loading, segments, router]);
 
   return <Stack screenOptions={{ headerShown: false }} />;
+}
+
+function AppContent() {
+  const { isDark } = useThemeMode();
+  return (
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <AuthGate />
+      <ToastContainer />
+      <ConfirmDialogContainer />
+    </>
+  );
 }
 
 export default function RootLayout() {
@@ -53,8 +77,9 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <ProfileProvider>
-              <StatusBar style="light" />
-              <AuthGate />
+              <ThemeProvider>
+                <AppContent />
+              </ThemeProvider>
             </ProfileProvider>
           </AuthProvider>
         </QueryClientProvider>

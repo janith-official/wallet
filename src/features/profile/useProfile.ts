@@ -56,6 +56,11 @@ export function useUploadAvatar(userId: string) {
       const arrayBuffer = await file.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
 
+      const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
+      if (bytes.byteLength > MAX_AVATAR_BYTES) {
+        throw new Error('Image is too large. Please choose a photo under 5 MB.');
+      }
+
       const filePath = `${userId}/avatar.jpg`;
 
       const { error: uploadError } = await supabase.storage
@@ -131,7 +136,11 @@ export function useUpsertAccount(userId: string) {
         sort_order: payload.sort_order ?? 0,
       };
       if (payload.id) {
-        const { error } = await supabase.from('accounts').update(row).eq('id', payload.id);
+        const { error } = await supabase
+          .from('accounts')
+          .update(row)
+          .eq('id', payload.id)
+          .eq('user_id', userId);
         if (error) throw error;
       } else {
         const { error } = await supabase.from('accounts').insert({ ...row, user_id: userId });

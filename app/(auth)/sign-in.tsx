@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  Alert,
   Animated,
   Image,
   KeyboardAvoidingView,
@@ -15,15 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/supabase/client';
-
-const C = {
-  bg: '#0a0a0c',
-  accent: '#dc2626',
-  text: '#f4f4f5',
-  muted: '#71717a',
-  placeholder: '#3a3a42',
-  inputLine: '#1e1e24',
-};
+import { toast } from '@/components/Toast';
+import { useTheme } from '@/features/theme/ThemeContext';
 
 type Mode = 'signin' | 'signup';
 
@@ -37,6 +29,7 @@ type InputFieldProps = {
 };
 
 function InputField({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType }: InputFieldProps) {
+  const C = useTheme();
   const [focused, setFocused] = useState(false);
   const [visible, setVisible] = useState(false);
   const lineAnim = useRef(new Animated.Value(0)).current;
@@ -48,7 +41,7 @@ function InputField({ icon, placeholder, value, onChangeText, secureTextEntry, k
 
   const lineColor = lineAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [C.inputLine, C.accent],
+    outputRange: [C.border, C.accent],
   });
 
   return (
@@ -69,7 +62,7 @@ function InputField({ icon, placeholder, value, onChangeText, secureTextEntry, k
             padding: 0,
           }}
           placeholder={placeholder}
-          placeholderTextColor={C.placeholder}
+          placeholderTextColor={C.muted}
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={isPassword && !visible}
@@ -95,6 +88,7 @@ function InputField({ icon, placeholder, value, onChangeText, secureTextEntry, k
 }
 
 export default function AuthScreen() {
+  const C = useTheme();
   const insets = useSafeAreaInsets();
 
   const [mode, setMode] = useState<Mode>('signin');
@@ -137,33 +131,40 @@ export default function AuthScreen() {
   };
 
   const onSubmit = async () => {
-    if (!email.trim() || !password) {
-      Alert.alert('Missing fields', 'Please enter your email and password.');
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail || !password) {
+      toast.error('Missing fields', 'Please enter your email and password.');
       return;
     }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      toast.error('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+
     if (mode === 'signup' && password.length < 8) {
-      Alert.alert('Password too short', 'Use at least 8 characters.');
+      toast.warning('Password too short', 'Use at least 8 characters.');
       return;
     }
     setBusy(true);
 
     if (mode === 'signin') {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      const { error } = await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
       setBusy(false);
-      if (error) Alert.alert('Sign in failed', error.message);
+      // Generic message prevents revealing whether the email is registered
+      if (error) toast.error('Sign in failed', 'Incorrect email or password.');
     } else {
-      const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+      const { data, error } = await supabase.auth.signUp({ email: trimmedEmail, password });
       setBusy(false);
       if (error) {
-        Alert.alert('Sign up failed', error.message);
+        toast.error('Sign up failed', 'Could not create account. Please try again.');
         return;
       }
       if (!data.session) {
-        Alert.alert(
-          'Check your email',
-          'Click the confirmation link we sent you, then sign in.',
-          [{ text: 'Go to sign in', onPress: () => switchMode('signin') }],
-        );
+        toast.success('Check your email', 'Click the confirmation link we sent you, then sign in.');
+        switchMode('signin');
       }
     }
   };
@@ -380,7 +381,7 @@ export default function AuthScreen() {
                   <View
                     style={{
                       height: 3,
-                      backgroundColor: '#1e1e24',
+                      backgroundColor: C.border,
                       borderRadius: 2,
                       marginBottom: 8,
                       overflow: 'hidden',
@@ -457,7 +458,7 @@ export default function AuthScreen() {
                   style={{
                     fontSize: 11,
                     fontFamily: 'SpaceGrotesk_400Regular',
-                    color: '#3a3a42',
+                    color: C.muted,
                     textAlign: 'center',
                     lineHeight: 17,
                     marginBottom: 32,

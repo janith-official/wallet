@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/Text';
+import { useTheme, useThemeMode } from '@/features/theme/ThemeContext';
 
 const TAB_META: Record<string, { label: string; icon: string }> = {
   index:        { label: 'Dashboard',    icon: 'grid-outline' },
@@ -21,15 +22,19 @@ const PILL_H = 46;
 const LINE_H = 3;
 const MARGIN_H = 12;
 const BAR_RADIUS = 20;
-const SCREEN_BG = '#0f0f0f';
-
-const BAR_TOP = '#2c2c2e';
-const BAR_MID = '#232326';
-const BAR_BOT = '#1a1a1d';
 
 export function TabBar({ state, navigation, position }: MaterialTopTabBarProps) {
+  const C = useTheme();
+  const { isDark } = useThemeMode();
   const insets = useSafeAreaInsets();
   const [barWidth, setBarWidth] = useState(0);
+
+  // Theme-aware bar and screen colors
+  const SCREEN_BG = C.bg;
+  const BAR_TOP = isDark ? '#2c2c2e' : '#ffffff';
+  const BAR_MID = isDark ? '#232326' : '#f8f8fa';
+  const BAR_BOT = isDark ? '#1a1a1d' : '#f0f0f4';
+  const inactiveColor = isDark ? '#8e8e93' : '#6b6b7a';
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     setBarWidth(e.nativeEvent.layout.width);
@@ -113,7 +118,7 @@ export function TabBar({ state, navigation, position }: MaterialTopTabBarProps) 
             backgroundColor: BAR_BOT,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.5,
+            shadowOpacity: isDark ? 0.5 : 0.15,
             shadowRadius: 12,
             elevation: 20,
           }}
@@ -130,7 +135,7 @@ export function TabBar({ state, navigation, position }: MaterialTopTabBarProps) 
             overflow: 'hidden',
           }}
         >
-          <View style={{ height: 1, backgroundColor: '#ffffff10' }} />
+          <View style={{ height: 1, backgroundColor: isDark ? '#ffffff10' : '#00000008' }} />
 
           {/* Sliding accent top line */}
           {barWidth > 0 && (
@@ -171,7 +176,7 @@ export function TabBar({ state, navigation, position }: MaterialTopTabBarProps) 
             {state.routes.map((route, index) => {
               const isFocused = state.index === index;
               const meta = TAB_META[route.name] ?? { label: route.name, icon: 'ellipse-outline' };
-              const color = isFocused ? ACCENT : '#8e8e93';
+              const color = isFocused ? ACCENT : inactiveColor;
 
               return (
                 <Pressable
@@ -207,7 +212,7 @@ export function TabBar({ state, navigation, position }: MaterialTopTabBarProps) 
             })}
           </View>
 
-          <View style={{ height: 1, backgroundColor: '#00000040' }} />
+          <View style={{ height: 1, backgroundColor: isDark ? '#00000040' : '#0000000a' }} />
         </LinearGradient>
       </View>
     </View>

@@ -1,15 +1,8 @@
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/Text';
+import { useTheme } from '@/features/theme/ThemeContext';
 import type { Category } from '@/features/categories/useCategories';
 import { CategoryIcon } from './CategoryIcon';
-
-const C = {
-  accent: '#dc2626',
-  border: '#2a2a2a',
-  card: '#1a1a1a',
-  text: '#f9fafb',
-  muted: '#9ca3af',
-};
 
 type Props = {
   categories: Category[];
@@ -19,9 +12,11 @@ type Props = {
 };
 
 export function CategoryPicker({ categories, value, onChange, onAdd }: Props) {
+  const C = useTheme();
+
   if (categories.length === 0) {
     return (
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <Text style={{ fontSize: 13, color: C.muted, fontStyle: 'italic' }}>
           No categories yet.
         </Text>

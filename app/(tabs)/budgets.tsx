@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text as RNText,
@@ -27,26 +28,13 @@ import { CategoryPicker } from '@/components/CategoryPicker';
 import { ProgressBar } from '@/components/ProgressBar';
 import { CurrencyPicker } from '@/components/CurrencyPicker';
 import { formatMoney } from '@/lib/currency';
+import { toast } from '@/components/Toast';
+import { confirmDialog } from '@/components/ConfirmDialog';
+import { useTheme } from '@/features/theme/ThemeContext';
 import type { BudgetWithSpend } from '@/features/budgets/useBudgets';
 import type { Category } from '@/features/categories/useCategories';
 import type { SupportedCurrency } from '@/components/CurrencyPicker';
-
-/* ── palette (matches dashboard + transactions) ── */
-const C = {
-  bg: '#0a0a0c',
-  card: '#141416',
-  border: '#1e1e24',
-  text: '#f0f0f5',
-  sub: '#b0b0be',
-  muted: '#5c5c70',
-  income: '#34d399',
-  expense: '#f87171',
-  accent: '#dc2626',
-  amber: '#f59e0b',
-  inputBg: '#0e0e10',
-  purple: '#a78bfa',
-  blue: '#60a5fa',
-};
+import type { Palette } from '@/features/theme/ThemeContext';
 
 const PRESET_COLORS = ['#f97316', '#ef4444', '#3b82f6', '#16a34a', '#a855f7', '#f59e0b', '#6b7280', '#0ea5e9'];
 
@@ -64,13 +52,14 @@ type CategoryFormValues = {
   color: string;
 };
 
-function statusColor(ratio: number) {
+function statusColor(ratio: number, C: Palette) {
   if (ratio >= 1) return C.expense;
   if (ratio >= 0.8) return C.amber;
   return C.income;
 }
 
 export default function BudgetsScreen() {
+  const C = useTheme();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
   const userId = session?.user.id ?? '';
@@ -123,7 +112,7 @@ export default function BudgetsScreen() {
     setValue('name', budget.name ?? '');
     setValue('category_id', budget.category_id ?? '');
     setValue('amount', String(budget.amount));
-    setValue('currency', (budget.currency as SupportedCurrency) ?? baseCurrency);
+    setValue('currency', budget.currency ?? baseCurrency);
     setShowModal(true);
     Animated.timing(slideAnim, { toValue: 0, duration: 280, useNativeDriver: true }).start();
   };
@@ -138,7 +127,7 @@ export default function BudgetsScreen() {
   const onSave = handleSubmit(async (values) => {
     const amount = parseFloat(values.amount);
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid amount', 'Enter a positive number.');
+      toast.error('Invalid amount', 'Enter a positive number.');
       return;
     }
     try {
@@ -163,19 +152,18 @@ export default function BudgetsScreen() {
       reset();
       closeModal();
     } catch (e: unknown) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save.');
+      toast.error('Save failed', e instanceof Error ? e.message : 'Failed to save.');
     }
   });
 
   const onDeleteBudget = (budget: BudgetWithSpend) => {
-    Alert.alert(
-      'Delete budget?',
-      `Remove the ${budget.name ?? budget.category?.name ?? 'this'} budget of ${formatMoney(budget.amount, budget.currency)}?`,
-      [
-        { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate(budget.id) },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
+    confirmDialog.show({
+      title: 'Delete budget?',
+      message: `Remove the ${budget.name ?? budget.category?.name ?? 'this'} budget of ${formatMoney(budget.amount, budget.currency)}?`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => deleteMutation.mutate(budget.id),
+    });
   };
 
   const isPending = addMutation.isPending || updateMutation.isPending;
@@ -212,7 +200,7 @@ export default function BudgetsScreen() {
 
   const onSaveCategory = catHandleSubmit(async (values) => {
     if (!values.name.trim()) {
-      Alert.alert('Name required', 'Enter a category name.');
+      toast.error('Name required', 'Enter a category name.');
       return;
     }
     try {
@@ -225,19 +213,18 @@ export default function BudgetsScreen() {
       });
       closeCatModal();
     } catch (e: unknown) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save.');
+      toast.error('Save failed', e instanceof Error ? e.message : 'Failed to save.');
     }
   });
 
   const onDeleteCategory = (cat: Category) => {
-    Alert.alert(
-      'Delete category?',
-      `Remove "${cat.name}"? Existing transactions will become uncategorised.`,
-      [
-        { text: 'Delete', style: 'destructive', onPress: () => deleteCategoryMutation.mutate(cat.id) },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
+    confirmDialog.show({
+      title: 'Delete category?',
+      message: `Remove "${cat.name}"? Existing transactions will become uncategorised.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () => deleteCategoryMutation.mutate(cat.id),
+    });
   };
 
   const isCatPending = upsertCategoryMutation.isPending;
@@ -381,15 +368,15 @@ export default function BudgetsScreen() {
                     </View>
                     <View
                       style={{
-                        backgroundColor: statusColor(overallRatio) + '18',
+                        backgroundColor: statusColor(overallRatio, C) + '18',
                         borderRadius: 8,
                         paddingHorizontal: 10,
                         paddingVertical: 4,
                         borderWidth: 1,
-                        borderColor: statusColor(overallRatio) + '40',
+                        borderColor: statusColor(overallRatio, C) + '40',
                       }}
                     >
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: statusColor(overallRatio) }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: statusColor(overallRatio, C) }}>
                         {Math.round(overallRatio * 100)}% used
                       </Text>
                     </View>
@@ -487,7 +474,7 @@ export default function BudgetsScreen() {
                 const ratio = b.amount > 0 ? b.spent / b.amount : 0;
                 const overBudget = ratio >= 1;
                 const left = b.amount - b.spent;
-                const sc = statusColor(ratio);
+                const sc = statusColor(ratio, C);
                 return (
                   <Pressable
                     key={b.id}
@@ -689,25 +676,27 @@ export default function BudgetsScreen() {
 
       {/* ── Budget Modal ── */}
       <Modal visible={showModal} transparent animationType="none" onRequestClose={closeModal}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)' }} onPress={closeModal} />
-        <Animated.View
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: C.card,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            borderWidth: 1,
-            borderBottomWidth: 0,
-            borderColor: C.border,
-            paddingHorizontal: 24,
-            paddingTop: 16,
-            paddingBottom: insets.bottom + 24,
-            transform: [{ translateY: slideAnim }],
-          }}
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          behavior="padding"
         >
+          <Pressable
+            style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.75)' }}
+            onPress={closeModal}
+          />
+          <Animated.View
+            style={{
+              backgroundColor: C.card,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderWidth: 1,
+              borderBottomWidth: 0,
+              borderColor: C.border,
+              paddingHorizontal: 24,
+              paddingTop: 16,
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 20 }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>
@@ -718,6 +707,11 @@ export default function BudgetsScreen() {
             </Pressable>
           </View>
 
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          >
           <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6 }}>
             Name
           </Text>
@@ -859,30 +853,34 @@ export default function BudgetsScreen() {
               </Text>
             </Pressable>
           </View>
-        </Animated.View>
+          </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Category Modal ── */}
       <Modal visible={showCatModal} transparent animationType="none" onRequestClose={closeCatModal}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)' }} onPress={closeCatModal} />
-        <Animated.View
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: C.card,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            borderWidth: 1,
-            borderBottomWidth: 0,
-            borderColor: C.border,
-            paddingHorizontal: 24,
-            paddingTop: 16,
-            paddingBottom: insets.bottom + 24,
-            transform: [{ translateY: catSlideAnim }],
-          }}
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          behavior="padding"
         >
+          <Pressable
+            style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.75)' }}
+            onPress={closeCatModal}
+          />
+          <Animated.View
+            style={{
+              backgroundColor: C.card,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderWidth: 1,
+              borderBottomWidth: 0,
+              borderColor: C.border,
+              paddingHorizontal: 24,
+              paddingTop: 16,
+              transform: [{ translateY: catSlideAnim }],
+            }}
+          >
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 20 }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>
@@ -893,6 +891,11 @@ export default function BudgetsScreen() {
             </Pressable>
           </View>
 
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          >
           <Text style={{ fontSize: 11, color: C.muted, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6 }}>
             Name
           </Text>
@@ -1082,7 +1085,9 @@ export default function BudgetsScreen() {
               </Text>
             </Pressable>
           </View>
-        </Animated.View>
+          </ScrollView>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

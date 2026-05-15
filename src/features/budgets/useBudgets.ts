@@ -129,7 +129,8 @@ export function useDeleteBudget(userId: string) {
       const { error } = await supabase
         .from('budgets')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', budgetId);
+        .eq('id', budgetId)
+        .eq('user_id', userId);
       if (error) throw error;
     },
     onSuccess: () => {
